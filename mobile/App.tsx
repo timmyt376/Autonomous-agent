@@ -5,7 +5,8 @@ import {
 } from "react-native";
 import * as Device from "expo-device";
 import { StatusBar } from "expo-status-bar";
-import { checkConnection, discoverModels, sendMessage } from "./src/aci";
+import { discoverModels, sendMessage } from "./src/aci";
+import { chatWithLocalModel, downloadAndLoadLocalModel } from "./src/localModel";
 import { loadSettings, saveSettings } from "./src/storage";
 import { ChatMessage, ConnectionSettings, ProviderMode } from "./src/types";
 
