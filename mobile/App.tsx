@@ -93,8 +93,10 @@ export default function App() {
     setDraft("");
     setBusy(true);
     try {
-      const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content) : await sendMessage(settings, next.slice(0, -1), content);
-      setMessages(current => [...current, { id: makeId(), role: "assistant", content: reply, createdAt: Date.now() }]);
+      const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content) : settings.mode === "aci-server" ? await sendToAciServer(settings.baseUrl, content) : await sendMessage(settings, next.slice(0, -1), content);
+      const completed = [...next, { id: makeId(), role: "assistant" as const, content: reply, createdAt: Date.now() }];
+      setMessages(completed);
+      await saveChat(completed);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unknown model error";
       setMessages(current => [...current, { id: makeId(), role: "assistant", content: `I couldn't reach the model. ${detail}`, createdAt: Date.now() }]);
@@ -114,6 +116,7 @@ export default function App() {
       </View>
       <View style={styles.tabs}>
         <TouchableOpacity onPress={() => setTab("chat")} style={[styles.tab, tab === "chat" && styles.tabActive]}><Text style={styles.tabText}>Chat</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setTab("models")} style={[styles.tab, tab === "models" && styles.tabActive]}><Text style={styles.tabText}>Models</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setTab("settings")} style={[styles.tab, tab === "settings" && styles.tabActive]}><Text style={styles.tabText}>Connection</Text></TouchableOpacity>
       </View>
       {tab === "chat" ? (
