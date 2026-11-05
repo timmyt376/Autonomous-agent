@@ -9,6 +9,7 @@ import { addAciGoal, checkAciServer, discoverModels, saveAciMemory, sendMessage,
 import { chatWithLocalModel, downloadAndLoadLocalModel, getActiveModelPath, loadInstalledLocalModel, unloadLocalModel } from "./src/localModel";
 import { deleteInstalledModel, formatBytes, listInstalledModels, InstalledModel } from "./src/modelManager";
 import { getDeviceAdvice } from "./src/recommendations";
+import { buildHuggingFaceDownloadUrl, CatalogFile, CatalogModel, listGgufFiles, searchGgufModels } from "./src/catalog";
 import { loadChat, loadSettings, saveChat, saveSettings } from "./src/storage";
 import { ChatMessage, ConnectionSettings } from "./src/types";
 
@@ -29,6 +30,11 @@ export default function App() {
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [memoryDraft, setMemoryDraft] = useState("");
   const [goalDraft, setGoalDraft] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState("small instruct");
+  const [catalogModels, setCatalogModels] = useState<CatalogModel[]>([]);
+  const [catalogFiles, setCatalogFiles] = useState<CatalogFile[]>([]);
+  const [selectedRepo, setSelectedRepo] = useState("");
+  const [catalogBusy, setCatalogBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<"chat" | "settings" | "models">("chat");
@@ -52,6 +58,32 @@ export default function App() {
   }, [settings?.mode]);
 
   async function refreshModels() { setInstalledModels(await listInstalledModels()); }
+
+  async function searchCatalog() {
+    setCatalogBusy(true); setCatalogFiles([]); setSelectedRepo("");
+    try { setCatalogModels(await searchGgufModels(catalogQuery)); }
+    catch (error) { setStatus(error instanceof Error ? error.message : "Catalogue search failed"); }
+    finally { setCatalogBusy(false); }
+  }
+
+  async function openCatalogModel(model: CatalogModel) {
+    setCatalogBusy(true); setSelectedRepo(model.id);
+    try { setCatalogFiles(await listGgufFiles(model.id)); }
+    catch (error) { setStatus(error instanceof Error ? error.message : "Could not list model files"); }
+    finally { setCatalogBusy(false); }
+  }
+
+  async function installCatalogFile(file: CatalogFile) {
+    if (!settings || !selectedRepo) return;
+    setCatalogBusy(true); setDownloadProgress(0);
+    try {
+      const url = buildHuggingFaceDownloadUrl(selectedRepo, file.name);
+      const result = await downloadAndLoadLocalModel(url, setDownloadProgress);
+      await updateSettings({ ...settings, mode: "device", model: file.name, modelUrl: url });
+      setStatus(result); await refreshModels();
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Model download failed"); }
+    finally { setCatalogBusy(false); setDownloadProgress(null); }
+  }
 
   async function updateSettings(next: ConnectionSettings) {
     setSettings(next);
@@ -159,6 +191,16 @@ export default function App() {
             </View>
           ))}
           <Text style={styles.status}>{status}</Text>
+          <View style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Browse GGUF models</Text>
+            <Text style={styles.help}>Search Hugging Face for GGUF repositories, inspect available model files, then download a selected file directly to this phone. Model publishers and licences are third-party; review them before downloading.</Text>
+            <TextInput value={catalogQuery} onChangeText={setCatalogQuery} style={styles.field} placeholder="Search models (e.g. Qwen 3 1.7B)" placeholderTextColor={colors.muted} autoCapitalize="none" />
+            <TouchableOpacity style={styles.smallButton} disabled={catalogBusy} onPress={searchCatalog}><Text style={styles.primaryText}>{catalogBusy ? "Searching…" : "Search catalogue"}</Text></TouchableOpacity>
+            {catalogModels.map(model => <TouchableOpacity key={model.id} style={styles.modelRow} onPress={() => openCatalogModel(model)}><Text style={styles.modelText}>{model.id}</Text><Text style={styles.muted}>{model.downloads.toLocaleString()} downloads</Text></TouchableOpacity>)}
+            {selectedRepo ? <Text style={styles.label}>GGUF files in {selectedRepo}</Text> : null}
+            {catalogFiles.map(file => <View key={file.name} style={styles.modelRow}><View style={styles.fill}><Text style={styles.modelText}>{file.name}</Text><Text style={styles.muted}>{file.size ? formatBytes(file.size) : "Size unavailable"}</Text></View><TouchableOpacity style={styles.smallButton} disabled={catalogBusy} onPress={() => installCatalogFile(file)}><Text style={styles.primaryText}>Install</Text></TouchableOpacity></View>)}
+            {downloadProgress !== null ? <Text style={styles.help}>Download: {(downloadProgress * 100).toFixed(0)}%</Text> : null}
+          </View>
         </ScrollView>
       ) : (
         <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent} keyboardShouldPersistTaps="handled">
