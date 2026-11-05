@@ -8,7 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import { discoverModels, sendMessage } from "./src/aci";
 import { chatWithLocalModel, downloadAndLoadLocalModel } from "./src/localModel";
 import { loadSettings, saveSettings } from "./src/storage";
-import { ChatMessage, ConnectionSettings, ProviderMode } from "./src/types";
+import { ChatMessage, ConnectionSettings } from "./src/types";
 
 const colors = {
   bg: "#0b0f1a", panel: "#121a29", panel2: "#182338",
