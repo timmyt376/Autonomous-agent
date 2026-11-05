@@ -35,15 +35,16 @@ Open http://127.0.0.1:8765.
 
 ## Mobile quick start
 
-Requirements: Node.js 20.19+.
+Requirements: Node.js 20.19+, Android Studio / Android SDK for Android builds, and Xcode on macOS for iOS builds.
 
 ```bash
 cd mobile
 npm install
-npx expo start
+npx expo prebuild
+npx expo run:android
 ```
 
-See [mobile/README.md](mobile/README.md) for Android/iOS build steps and model connection setup.
+The mobile app uses native llama.cpp bindings and does not run in standard Expo Go. See [mobile/README.md](mobile/README.md) for iOS build steps and model connection setup.
 
 **On-device inference:** the mobile app bundles llama.cpp through `llama.rn` and can download and run compatible GGUF models directly on supported Android and iOS devices. It also supports OpenAI-compatible remote API providers. Device compatibility depends on architecture, available memory, model quantisation, and acceleration support; see [mobile/README.md](mobile/README.md).
 
