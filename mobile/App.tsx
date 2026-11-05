@@ -38,7 +38,7 @@ export default function App() {
 
   const isDeviceMode = settings?.mode === "device";
   const modeDescription = useMemo(() => isDeviceMode
-    ? "Device-local endpoint. Prompts stay on this phone only when the endpoint is a runtime running on this same device."
+    ? "Run a GGUF model directly on this phone with the bundled llama.cpp native runtime."
     : "API mode. Prompts are sent to the provider URL you configure.", [isDeviceMode]);
 
   async function updateSettings(next: ConnectionSettings) {
@@ -147,8 +147,8 @@ export default function App() {
           <Text style={styles.status}>{status}</Text>
           {models.map(model => <TouchableOpacity key={model} style={styles.modelRow} onPress={() => updateSettings({ ...settings, model })}><Text style={styles.modelText}>{model}</Text><Text style={styles.muted}>{settings.model === model ? "Selected ✓" : "Use model"}</Text></TouchableOpacity>)}
           <View style={styles.infoCard}><Text style={styles.sectionTitle}>Device information</Text><Text style={styles.help}>{deviceInfo}</Text><Text style={styles.help}>Memory and hardware reporting is advisory only. A model's actual compatibility depends on its size, quantisation, runtime, available RAM, accelerator support and thermal limits.</Text></View>
-          <View style={styles.infoCard}><Text style={styles.sectionTitle}>Local model setup</Text><Text style={styles.help}>For true on-phone inference, install or bundle a compatible on-device runtime that exposes an OpenAI-compatible HTTP endpoint on the phone (for example, a llama.cpp-based mobile runtime). Set its local endpoint above. The app never silently falls back to a cloud provider.</Text><Text style={styles.help}>If the runtime runs on another computer, use that computer's LAN address instead; that is local-network inference, not on-device inference.</Text></View>
-          <View style={styles.infoCard}><Text style={styles.sectionTitle}>Privacy</Text><Text style={styles.help}>API mode sends messages to the configured provider. Device mode sends requests only to the configured endpoint. Do not use an untrusted endpoint or paste secrets into chat.</Text></View>
+          <View style={styles.infoCard}><Text style={styles.sectionTitle}>Local model setup</Text><Text style={styles.help}>ACI Mobile includes llama.cpp through llama.rn. GGUF models run natively on the phone using the available CPU/GPU backend. Choose a quantised model that fits available memory; 1B–3B Q4 models are a sensible starting point on many modern phones, but compatibility varies.</Text><Text style={styles.help}>For a model running on another computer, use API mode and its LAN endpoint.</Text></View>
+          <View style={styles.infoCard}><Text style={styles.sectionTitle}>Privacy</Text><Text style={styles.help}>API mode sends messages to the configured provider. Device mode runs inference locally after the model is downloaded; chat prompts are not sent to a model API. Do not use an untrusted endpoint or paste secrets into chat.</Text></View>
         </ScrollView>
       )}
     </SafeAreaView>
