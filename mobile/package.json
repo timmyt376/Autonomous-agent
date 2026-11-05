@@ -21,7 +21,7 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "expo-build-properties": "~1.0.9",
-    "expo-dev-client": "~6.0.17"
+    "expo-dev-client": "~6.0.21"
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
