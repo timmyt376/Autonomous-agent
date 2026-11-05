@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { initLlama } from "llama.rn";
-import { ChatMessage } from "./types";
+import type { ChatMessage } from "./types";
 
 type LlamaContext = Awaited<ReturnType<typeof initLlama>>;
 let activeContext: LlamaContext | null = null;
