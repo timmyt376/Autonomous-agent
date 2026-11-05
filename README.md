@@ -46,19 +46,20 @@ npx expo run:android
 
 The mobile app uses native llama.cpp bindings and does not run in standard Expo Go. See [mobile/README.md](mobile/README.md) for iOS build steps and model connection setup.
 
-**On-device inference:** the mobile app bundles llama.cpp through `llama.rn` and can download and run compatible GGUF models directly on supported Android and iOS devices. It also supports OpenAI-compatible remote API providers. Device compatibility depends on architecture, available memory, model quantisation, and acceleration support; see [mobile/README.md](mobile/README.md).
+**Mobile:** ACI Mobile supports local GGUF inference through llama.cpp, a downloaded-model library, persistent chat, OpenAI-compatible APIs, and direct ACI server connections with optional bearer-token authentication. See [mobile/README.md](mobile/README.md).
 
 ## Desktop configuration
 
 - `ACI_OLLAMA_URL`: default `http://127.0.0.1:11434`
 - `ACI_MODEL`: default `llama3.2:3b`
 - `ACI_DATA_DIR`: default `./data`
-- `ACI_HOST`: default `127.0.0.1`
+- `ACI_HOST`: default `127.0.0.1`; set to `0.0.0.0` for LAN access
+- `ACI_API_TOKEN`: optional bearer token required for `/api/*` when set
 - `ACI_PORT`: default `8765`
 
 ## Safety and scope
 
-The desktop runtime defaults to a loopback-only bind. The current foundation does not provide unrestricted shell execution or arbitrary filesystem control. Keep services private unless authentication and transport security are configured. This is an early agent foundation, not a self-improving AGI; learning currently means storing and retrieving experiences and user-approved facts.
+The desktop runtime defaults to a loopback-only bind. The current foundation does not provide unrestricted shell execution or arbitrary filesystem control. Keep services private unless authentication and transport security are configured. For mobile LAN access, set a strong `ACI_API_TOKEN` before binding to `0.0.0.0`. This is an early agent foundation, not a self-improving AGI; learning currently means storing and retrieving experiences and user-approved facts.
 
 ## Development
 
