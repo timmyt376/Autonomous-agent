@@ -1,64 +1,81 @@
 # ACI Mobile
 
-Cross-platform Expo / React Native client for the ACI project. It is a separate mobile application and does not replace the Python ACI runtime.
+Cross-platform Expo / React Native companion app for the ACI desktop/server runtime.
 
-## Features
+## What it does
 
-- Android and iOS app with a mobile chat interface.
-- **True on-device inference:** GGUF models run in the app process using llama.cpp via `llama.rn` (Metal on supported iPhones/iPads; CPU and supported GPU acceleration on Android).
-- Download a GGUF model from a direct URL into private app storage, then load it locally.
-- Remote API mode using OpenAI-compatible `/v1/models` and `/v1/chat/completions`.
-- Explicit mode selection. No silent cloud fallback.
-- API keys stored using the platform secure-storage facility.
-- Device model and reported memory shown as advisory compatibility information.
+- Android and iOS chat client with persistent local conversation history.
+- **On-device inference:** llama.cpp via llama.rn; compatible GGUF models execute on the phone.
+- Download progress, installed-model library, load and delete controls.
+- Device RAM-based starting recommendations (advisory only).
+- OpenAI-compatible API mode for hosted or LAN inference endpoints.
+- Direct ACI server mode for the Python runtime: chat, memory notes and goals.
+- API credentials stored in Expo SecureStore.
+- No silent fallback between local and remote providers.
 
-## Run it
+## Build requirements
 
-Requirements: Node.js 20.19+, Android Studio / Android SDK for Android builds, and Xcode on macOS for iOS builds.
+- Node.js 20.19+
+- Android Studio and Android SDK for Android builds.
+- macOS and Xcode for iOS builds.
+- Native build required; **Expo Go is not supported** because llama.cpp is a native module.
 
-```bash
-cd mobile
-npm install
-npx expo prebuild
-npx expo run:android
-```
+    cd mobile
+    npm install
+    npx expo prebuild
+    npx expo run:android
 
-For iOS on macOS:
+iOS (on macOS):
 
-```bash
-cd mobile
-npm install
-npx expo prebuild
-npx pod-install
-npx expo run:ios
-```
+    cd mobile
+    npm install
+    npx expo prebuild
+    npx pod-install
+    npx expo run:ios
 
-This app includes native modules and **will not run in standard Expo Go**. Use a development build or native build. The `llama.rn` dependency downloads native llama.cpp artifacts during installation.
+For a distributable Android build, use an EAS or local Gradle release build after configuring Android signing credentials. For iOS distribution, configure Apple signing and provisioning.
 
 ## On-device models
 
-1. Choose **On this device** in Connection settings.
-2. Paste a direct download URL to a compatible `.gguf` model file.
-3. Tap **Download & load on this phone**.
-4. Wait for model initialisation, then return to Chat.
+1. Open **Connection** and choose **On device**.
+2. Paste a direct HTTPS URL ending in a compatible .gguf file.
+3. Tap **Download & load on this phone** and watch the progress indicator.
+4. Use the **Models** tab to load a previously downloaded model or delete it.
 
-Use quantised GGUF models intended for mobile devices. A 1B–3B Q4 model is a reasonable starting point for many modern phones, but there is no universal minimum: actual support depends on free RAM, model architecture, context size, operating system memory limits, CPU/GPU backend, and thermal throttling. Large models can make the app crash or the phone terminate it. The initial implementation uses a 2048-token context and requests GPU offload where supported.
+The app uses a 2048-token context and requests GPU layer offload; actual acceleration depends on device support and native backend. llama.rn supports Metal on iOS and CPU plus selected Android GPU/NPU backends; Android acceleration is device-dependent and some backends are experimental.
 
-Models are downloaded to the app's private document storage. The current version does not yet provide a model catalogue, download progress UI, model deletion UI, or automatic RAM-based model recommendations. Only download models from sources you trust and check their licences.
+The app shows rough model-size guidance based on total reported device RAM. It cannot know how much memory is currently free, and Android/iOS may terminate an app that exceeds memory limits. Start with a small quantised model, close other demanding apps, and increase model size cautiously. Model compatibility also depends on architecture, tokenizer, quantisation, context size, and thermal throttling.
 
-The native runtime is based on [llama.rn](https://github.com/mybigday/llama.rn), a React Native binding for llama.cpp. Its Android GPU/NPU acceleration support varies by device; CPU fallback is available on supported architectures.
+Models are stored in the app's private document directory. Removing the app removes those files. Only download models from sources you trust and check model licences. The app does not ship model weights.
 
-## API mode
+## OpenAI-compatible API mode
 
-Set the provider's OpenAI-compatible base URL, model ID, and API key. API mode sends prompts to that configured provider. The app does not proxy API traffic through the ACI desktop server.
+Enter the provider's base URL (the URL before /models), model ID and optional API key. The app uses /models and /chat/completions. Prompts are sent to that provider.
 
-## Remote ACI server
+## Connect to your ACI desktop/server
 
-The current API mode can connect to an OpenAI-compatible endpoint. The Python ACI server currently exposes its own native `/api/chat` API rather than the OpenAI-compatible routes, so direct ACI server integration needs a dedicated adapter in a later update.
+1. On the computer running ACI, set ACI_HOST=0.0.0.0 in its .env file so it listens on the LAN.
+2. Set a strong random ACI_API_TOKEN in the same .env file.
+3. Restart ACI.
+4. Find the computer's private LAN IP address.
+5. In the app choose **ACI server**, enter http://COMPUTER-LAN-IP:8765, and enter the same bearer token.
+6. Test the connection.
 
-## Security
+The token protects all /api/* routes using Bearer authentication. Keep the service on a trusted private network or put it behind a properly configured HTTPS reverse proxy. Do not port-forward the service to the public internet. If you do not set a token, the server retains its original unauthenticated API behaviour; keep its default loopback binding in that case.
 
-- API keys are stored using Expo SecureStore.
-- Device mode performs model inference locally after downloading the GGUF file.
-- API mode sends conversation content to the configured provider.
-- Use HTTPS for remote API endpoints and do not expose unauthenticated model services to the public internet.
+ACI server mode sends each new user message to the server's /api/chat endpoint. The server owns its model context and persistent memory. Mobile conversation history is also saved locally for display, but that local transcript is not replayed into the server.
+
+## Privacy
+
+- On-device mode: after the model download, inference runs locally and chat prompts are not sent to a model API.
+- API mode: prompts are sent to the provider configured by the user.
+- ACI server mode: prompts are sent to the user's configured ACI server.
+- API credentials are stored using platform secure storage.
+- Chat transcripts are stored in app-private storage.
+
+## Troubleshooting
+
+- **Native module missing:** run npx expo prebuild and rebuild the native app; Expo Go cannot load llama.cpp.
+- **Model won't load:** check that the URL points to a complete GGUF file, free phone storage/RAM, and model architecture support.
+- **API connection fails:** verify the base URL, provider model ID, API key, and OpenAI-compatible endpoint support.
+- **ACI server unreachable:** verify both devices are on the same network, use the computer's LAN IP (not 127.0.0.1), confirm ACI_HOST=0.0.0.0, allow the port through the computer firewall, and check the bearer token.
