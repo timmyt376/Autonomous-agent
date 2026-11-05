@@ -126,13 +126,24 @@ export default function App() {
             <TouchableOpacity onPress={() => updateSettings({ ...settings, mode: "api" })} style={[styles.segmentButton, !isDeviceMode && styles.segmentSelected]}><Text style={styles.segmentText}>API provider</Text></TouchableOpacity>
           </View>
           <Text style={styles.help}>{modeDescription}</Text>
-          <Text style={styles.label}>OpenAI-compatible base URL</Text>
-          <TextInput value={settings.baseUrl} onChangeText={value => updateSettings({ ...settings, baseUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="http://127.0.0.1:8080/v1" placeholderTextColor={colors.muted} />
-          <Text style={styles.label}>Model ID</Text>
-          <TextInput value={settings.model} onChangeText={value => updateSettings({ ...settings, model: value })} autoCapitalize="none" autoCorrect={false} style={styles.field} placeholder="model-name" placeholderTextColor={colors.muted} />
-          <Text style={styles.label}>API key (optional for local runtimes)</Text>
-          <TextInput value={settings.apiKey} onChangeText={value => updateSettings({ ...settings, apiKey: value })} secureTextEntry autoCapitalize="none" autoCorrect={false} style={styles.field} placeholder="Stored securely on this device" placeholderTextColor={colors.muted} />
-          <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Test connection & find models</Text></TouchableOpacity>
+          {isDeviceMode ? (
+            <>
+              <Text style={styles.label}>Direct GGUF model URL</Text>
+              <TextInput value={settings.modelUrl} onChangeText={value => updateSettings({ ...settings, modelUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="https://huggingface.co/.../model.Q4_K_M.gguf" placeholderTextColor={colors.muted} />
+              <Text style={styles.help}>Paste a direct download link to a GGUF file. It will be saved in private app storage and loaded by llama.cpp on this phone.</Text>
+              <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Download & load on this phone</Text></TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.label}>OpenAI-compatible base URL</Text>
+              <TextInput value={settings.baseUrl} onChangeText={value => updateSettings({ ...settings, baseUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="https://api.example.com/v1" placeholderTextColor={colors.muted} />
+              <Text style={styles.label}>Model ID</Text>
+              <TextInput value={settings.model} onChangeText={value => updateSettings({ ...settings, model: value })} autoCapitalize="none" autoCorrect={false} style={styles.field} placeholder="model-name" placeholderTextColor={colors.muted} />
+              <Text style={styles.label}>API key</Text>
+              <TextInput value={settings.apiKey} onChangeText={value => updateSettings({ ...settings, apiKey: value })} secureTextEntry autoCapitalize="none" autoCorrect={false} style={styles.field} placeholder="Stored securely on this device" placeholderTextColor={colors.muted} />
+              <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Test connection & find models</Text></TouchableOpacity>
+            </>
+          )}
           <Text style={styles.status}>{status}</Text>
           {models.map(model => <TouchableOpacity key={model} style={styles.modelRow} onPress={() => updateSettings({ ...settings, model })}><Text style={styles.modelText}>{model}</Text><Text style={styles.muted}>{settings.model === model ? "Selected ✓" : "Use model"}</Text></TouchableOpacity>)}
           <View style={styles.infoCard}><Text style={styles.sectionTitle}>Device information</Text><Text style={styles.help}>{deviceInfo}</Text><Text style={styles.help}>Memory and hardware reporting is advisory only. A model's actual compatibility depends on its size, quantisation, runtime, available RAM, accelerator support and thermal limits.</Text></View>
