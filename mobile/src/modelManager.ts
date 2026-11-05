@@ -30,8 +30,9 @@ export async function listInstalledModels(): Promise<InstalledModel[]> {
 
 export async function deleteInstalledModel(uri: string): Promise<void> {
   const root = FileSystem.documentDirectory;
-  if (!root || !uri.startsWith(root) || !uri.toLowerCase().endsWith(".gguf")) {
-    throw new Error("Refusing to delete a file outside ACI's model storage.");
+  const filename = root && uri.startsWith(root) ? uri.slice(root.length) : "";
+  if (!root || !filename || filename.includes("/") || filename.includes("\\") || !filename.toLowerCase().endsWith(".gguf")) {
+    throw new Error("Refusing to delete a file outside ACI model storage.");
   }
   await FileSystem.deleteAsync(uri, { idempotent: true });
 }
