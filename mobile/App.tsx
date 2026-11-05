@@ -70,7 +70,7 @@ export default function App() {
         setStatus(result);
         await refreshModels();
       } else if (settings.mode === "aci-server") {
-        setStatus(await checkAciServer(settings.baseUrl));
+        setStatus(await checkAciServer(settings.baseUrl, settings.apiKey));
       } else {
         const found = await discoverModels(settings);
         setModels(found.map(item => item.id));
@@ -93,7 +93,7 @@ export default function App() {
     setDraft("");
     setBusy(true);
     try {
-      const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content) : settings.mode === "aci-server" ? await sendToAciServer(settings.baseUrl, content) : await sendMessage(settings, next.slice(0, -1), content);
+      const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content) : settings.mode === "aci-server" ? await sendToAciServer(settings.baseUrl, content, settings.apiKey) : await sendMessage(settings, next.slice(0, -1), content);
       const completed = [...next, { id: makeId(), role: "assistant" as const, content: reply, createdAt: Date.now() }];
       setMessages(completed);
       await saveChat(completed);
@@ -179,13 +179,15 @@ export default function App() {
               <Text style={styles.label}>ACI server URL</Text>
               <TextInput value={settings.baseUrl} onChangeText={value => updateSettings({ ...settings, baseUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="http://192.168.1.20:8765" placeholderTextColor={colors.muted} />
               <Text style={styles.help}>Use your computer LAN IP and ACI port 8765. The server must listen on the LAN interface. Do not expose it publicly without authentication and HTTPS.</Text>
+              <Text style={styles.label}>API bearer token (if configured on server)</Text>
+              <TextInput value={settings.apiKey} onChangeText={value => updateSettings({ ...settings, apiKey: value })} secureTextEntry autoCapitalize="none" autoCorrect={false} style={styles.field} placeholder="Stored securely on this phone" placeholderTextColor={colors.muted} />
               <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Test ACI server</Text></TouchableOpacity>
               <Text style={styles.label}>Memory note</Text>
               <TextInput value={memoryDraft} onChangeText={setMemoryDraft} style={styles.field} placeholder="Something ACI should remember" placeholderTextColor={colors.muted} />
-              <TouchableOpacity style={styles.smallButton} onPress={async () => { try { await saveAciMemory(settings.baseUrl, memoryDraft); setMemoryDraft(""); Alert.alert("Saved", "Memory saved to your ACI server."); } catch (e) { Alert.alert("Could not save", e instanceof Error ? e.message : "Unknown error"); } }}><Text style={styles.primaryText}>Save memory</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.smallButton} onPress={async () => { try { await saveAciMemory(settings.baseUrl, memoryDraft, settings.apiKey); setMemoryDraft(""); Alert.alert("Saved", "Memory saved to your ACI server."); } catch (e) { Alert.alert("Could not save", e instanceof Error ? e.message : "Unknown error"); } }}><Text style={styles.primaryText}>Save memory</Text></TouchableOpacity>
               <Text style={styles.label}>Goal</Text>
               <TextInput value={goalDraft} onChangeText={setGoalDraft} style={styles.field} placeholder="A goal for ACI to track" placeholderTextColor={colors.muted} />
-              <TouchableOpacity style={styles.smallButton} onPress={async () => { try { await addAciGoal(settings.baseUrl, goalDraft); setGoalDraft(""); Alert.alert("Added", "Goal added to your ACI server."); } catch (e) { Alert.alert("Could not add goal", e instanceof Error ? e.message : "Unknown error"); } }}><Text style={styles.primaryText}>Add goal</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.smallButton} onPress={async () => { try { await addAciGoal(settings.baseUrl, goalDraft, settings.apiKey); setGoalDraft(""); Alert.alert("Added", "Goal added to your ACI server."); } catch (e) { Alert.alert("Could not add goal", e instanceof Error ? e.message : "Unknown error"); } }}><Text style={styles.primaryText}>Add goal</Text></TouchableOpacity>
             </>
           ) : (
             <>
