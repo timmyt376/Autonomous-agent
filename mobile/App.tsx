@@ -50,10 +50,16 @@ export default function App() {
     if (!settings) return;
     setStatus("Checking…");
     try {
-      const found = await discoverModels(settings);
-      setModels(found.map(item => item.id));
-      setStatus(found.length ? `Connected · ${found.length} model(s)` : "Connected · no models found");
-      if (!settings.model && found[0]) await updateSettings({ ...settings, model: found[0].id });
+      if (settings.mode === "device") {
+        const result = await downloadAndLoadLocalModel(settings.modelUrl);
+        setStatus(result);
+        setModels([settings.model || "On-device GGUF"]);
+      } else {
+        const found = await discoverModels(settings);
+        setModels(found.map(item => item.id));
+        setStatus("Connected · " + found.length + " model(s)");
+        if (!settings.model && found[0]) await updateSettings({ ...settings, model: found[0].id });
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Connection failed");
     }
@@ -68,7 +74,7 @@ export default function App() {
     setDraft("");
     setBusy(true);
     try {
-      const reply = await sendMessage(settings, next.slice(0, -1), content);
+      const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content) : await sendMessage(settings, next.slice(0, -1), content);
       setMessages(current => [...current, { id: makeId(), role: "assistant", content: reply, createdAt: Date.now() }]);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unknown model error";
