@@ -1,6 +1,6 @@
-from contextlib import asynccontextmanager
+import hmac
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 import uvicorn
 
@@ -20,6 +20,15 @@ class NoteInput(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
 
 app = FastAPI(title="ACI Runtime", version="0.2.0")
+
+@app.middleware("http")
+async def protect_api(request, call_next):
+    if settings.api_token and request.url.path.startswith("/api/"):
+        authorization = request.headers.get("authorization", "")
+        supplied = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+        if not hmac.compare_digest(supplied, settings.api_token):
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    return await call_next(request)
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
