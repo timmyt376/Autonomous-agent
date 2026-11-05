@@ -100,7 +100,9 @@ export default function App() {
       await saveChat(completed);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unknown model error";
-      setMessages(current => [...current, { id: makeId(), role: "assistant", content: `I couldn't reach the model. ${detail}`, createdAt: Date.now() }]);
+      const failed = [...next, { id: makeId(), role: "assistant" as const, content: `I couldn't reach the model. ${detail}`, createdAt: Date.now() }];
+      setMessages(failed);
+      await saveChat(failed);
     } finally {
       setBusy(false);
     }
