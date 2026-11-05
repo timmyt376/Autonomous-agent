@@ -10,6 +10,7 @@ class Settings:
     data_dir = Path(os.getenv("ACI_DATA_DIR", "./data")).expanduser().resolve()
     workspace = Path(os.getenv("ACI_WORKSPACE", "./workspace")).expanduser().resolve()
     host = os.getenv("ACI_HOST", "127.0.0.1")
+    api_token = os.getenv("ACI_API_TOKEN", "").strip()
     port = int(os.getenv("ACI_PORT", "8765"))
     max_context_messages = max(2, int(os.getenv("ACI_MAX_CONTEXT_MESSAGES", "12")))
 
