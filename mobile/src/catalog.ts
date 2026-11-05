@@ -28,7 +28,7 @@ export async function listGgufFiles(modelId: string): Promise<CatalogFile[]> {
   const url = "https://huggingface.co/api/models/" + encodeURIComponent(modelId).replace(/%2F/g, "/") + "?blobs=true";
   const result = await getJson<{ siblings?: Array<{ rfilename?: string; size?: number }> }>(url);
   return (result.siblings ?? [])
-    .filter(file => typeof file.rfilename === "string" && file.rfilename.toLowerCase().endsWith(".gguf"))
+    .filter(file => typeof file.rfilename === "string" && file.rfilename.toLowerCase().endsWith(".gguf") && !file.rfilename.toLowerCase().includes("mmproj"))
     .map(file => ({ name: file.rfilename!, size: file.size }))
     .sort((a, b) => (a.size ?? Number.MAX_SAFE_INTEGER) - (b.size ?? Number.MAX_SAFE_INTEGER));
 }
