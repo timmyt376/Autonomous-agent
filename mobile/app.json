@@ -8,7 +8,9 @@
     "newArchEnabled": true,
     "android": {
       "package": "dev.aci.mobile",
-      "permissions": ["INTERNET"]
+      "permissions": [
+        "INTERNET"
+      ]
     },
     "ios": {
       "bundleIdentifier": "dev.aci.mobile",
@@ -16,6 +18,10 @@
     },
     "plugins": [
       "expo-secure-store",
+      [
+        "expo-build-properties",
+        {}
+      ],
       [
         "llama.rn",
         {
