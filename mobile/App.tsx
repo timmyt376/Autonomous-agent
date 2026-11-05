@@ -43,8 +43,9 @@ export default function App() {
   const [deviceInfo, setDeviceInfo] = useState("Checking device…");
 
   useEffect(() => {
-    loadSettings().then(setSettings).catch(() => Alert.alert("Storage error", "Could not load ACI settings."));
-    loadChat().then(setMessages).catch(() => undefined);
+    Promise.all([loadSettings(), loadChat()])
+      .then(([savedSettings, savedChat]) => { setSettings(savedSettings); setMessages(savedChat); })
+      .catch(() => Alert.alert("Storage error", "Could not load ACI settings or chat history."));
     refreshModels().catch(() => undefined);
     const memory = Device.totalMemory ? `${(Device.totalMemory / 1024 ** 3).toFixed(1)} GB RAM reported` : "Device memory information unavailable";
     setDeviceInfo(`${Device.manufacturer ?? "Device"} ${Device.modelName ?? ""} · ${Platform.OS} · ${memory}`);
