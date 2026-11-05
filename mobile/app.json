@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "ACI Mobile",
+    "slug": "aci-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "dev.aci.mobile",
+      "permissions": ["INTERNET"]
+    },
+    "ios": {
+      "bundleIdentifier": "dev.aci.mobile",
+      "supportsTablet": true
+    },
+    "plugins": ["expo-secure-store"]
+  }
+}
