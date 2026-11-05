@@ -9,7 +9,7 @@
     "android": {
       "package": "dev.aci.mobile",
       "permissions": [
-        "INTERNET"
+        "android.permission.INTERNET"
       ],
       "usesCleartextTraffic": true
     },
