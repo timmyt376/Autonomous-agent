@@ -7,3 +7,9 @@ web-build/
 *.p8
 *.p12
 *.mobileprovision
+
+# Generated native projects (Expo Continuous Native Generation)
+android/
+ios/
+# EAS local build output
+.eas-build/
