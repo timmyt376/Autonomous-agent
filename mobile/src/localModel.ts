@@ -44,10 +44,12 @@ export async function downloadAndLoadLocalModel(
         onProgress?.(total > 0 ? progress.totalBytesWritten / total : 0);
       }
     );
-    const result = await task.downloadAsync();
-    if (!result || result.status < 200 || result.status >= 300) {
+    try {
+      const result = await task.downloadAsync();
+      if (!result || result.status < 200 || result.status >= 300) throw new Error(`Model download failed (${result?.status ?? "no response"}).`);
+    } catch (error) {
       await FileSystem.deleteAsync(path, { idempotent: true });
-      throw new Error(`Model download failed (${result?.status ?? "no response"}).`);
+      throw error;
     }
   }
 
