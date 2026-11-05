@@ -10,11 +10,17 @@
       "package": "dev.aci.mobile",
       "permissions": [
         "INTERNET"
-      ]
+      ],
+      "usesCleartextTraffic": true
     },
     "ios": {
       "bundleIdentifier": "dev.aci.mobile",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "plugins": [
       "expo-secure-store",
