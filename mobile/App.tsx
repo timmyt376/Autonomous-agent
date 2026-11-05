@@ -93,6 +93,7 @@ export default function App() {
     setDraft("");
     setBusy(true);
     try {
+      await saveChat(next);
       const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content) : settings.mode === "aci-server" ? await sendToAciServer(settings.baseUrl, content, settings.apiKey) : await sendMessage(settings, next.slice(0, -1), content);
       const completed = [...next, { id: makeId(), role: "assistant" as const, content: reply, createdAt: Date.now() }];
       setMessages(completed);
@@ -121,7 +122,7 @@ export default function App() {
       </View>
       {tab === "chat" ? (
         <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={styles.connectionLine}><Text style={styles.muted}>{settings.model || "No model selected"}</Text><Text style={styles.muted}>{status}</Text></View>
+          <View style={styles.connectionLine}><View style={styles.fill}><Text style={styles.muted}>{settings.model || "No model selected"}</Text><Text style={styles.muted}>{status}</Text></View><TouchableOpacity onPress={() => Alert.alert("Clear conversation?", "This removes the saved chat transcript from this phone.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: async () => { setMessages([]); await saveChat([]); } }])}><Text style={styles.clearText}>Clear</Text></TouchableOpacity></View>
           <FlatList
             style={styles.fill}
             contentContainerStyle={styles.chatList}
@@ -225,7 +226,8 @@ const styles = StyleSheet.create({
   tab: { paddingVertical: 12, marginRight: 22, borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabActive: { borderBottomColor: colors.blue },
   tabText: { color: colors.text, fontWeight: "600" },
-  connectionLine: { paddingHorizontal: 18, paddingVertical: 9, flexDirection: "row", justifyContent: "space-between", gap: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  connectionLine: { paddingHorizontal: 18, paddingVertical: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  clearText: { color: colors.amber, fontSize: 12, fontWeight: "700", padding: 8 },
   muted: { color: colors.muted, fontSize: 11, flexShrink: 1 },
   chatList: { padding: 16, flexGrow: 1, gap: 12 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 260, gap: 8 },
