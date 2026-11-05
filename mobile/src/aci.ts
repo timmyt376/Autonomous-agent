@@ -63,19 +63,19 @@ export async function checkConnection(settings: ConnectionSettings): Promise<str
   return models.length ? `Connected · ${models.length} model(s) found` : "Connected · no models were listed";
 }
 
-export async function checkAciServer(baseUrl: string): Promise<string> {
+export async function checkAciServer(baseUrl: string, apiKey = ""): Promise<string> {
   if (!baseUrl.trim()) throw new Error("Enter the ACI server address.");
-  const response = await request(endpoint(baseUrl, "/api/status"), { method: "GET" }, 15000);
+  const response = await request(endpoint(baseUrl, "/api/status"), { method: "GET", headers: apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {} }, 15000);
   if (!response.ok) throw new Error(`ACI server check failed (${response.status}).`);
   const data = await response.json() as { name?: string; version?: string; ollama_connected?: boolean; model?: string };
   return `${data.name ?? "ACI"} ${data.version ?? ""} · ${data.ollama_connected ? "model backend connected" : "server online, model backend offline"} · ${data.model ?? "no model"}`;
 }
 
-export async function sendToAciServer(baseUrl: string, message: string): Promise<string> {
+export async function sendToAciServer(baseUrl: string, message: string, apiKey = ""): Promise<string> {
   if (!baseUrl.trim()) throw new Error("Enter the ACI server address in Connection settings.");
   const response = await request(endpoint(baseUrl, "/api/chat"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}) },
     body: JSON.stringify({ message })
   });
   if (!response.ok) {
@@ -87,16 +87,16 @@ export async function sendToAciServer(baseUrl: string, message: string): Promise
   return data.reply.trim();
 }
 
-export async function saveAciMemory(baseUrl: string, content: string): Promise<void> {
+export async function saveAciMemory(baseUrl: string, content: string, apiKey = ""): Promise<void> {
   const response = await request(endpoint(baseUrl, "/api/memory"), {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content })
+    method: "POST", headers: { "Content-Type": "application/json", ...(apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}) }, body: JSON.stringify({ content })
   });
   if (!response.ok) throw new Error(`Could not save memory (${response.status}).`);
 }
 
-export async function addAciGoal(baseUrl: string, content: string): Promise<void> {
+export async function addAciGoal(baseUrl: string, content: string, apiKey = ""): Promise<void> {
   const response = await request(endpoint(baseUrl, "/api/goals"), {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content })
+    method: "POST", headers: { "Content-Type": "application/json", ...(apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}) }, body: JSON.stringify({ content })
   });
   if (!response.ok) throw new Error(`Could not add goal (${response.status}).`);
 }
