@@ -5,6 +5,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
     "android": {
       "package": "dev.aci.mobile",
       "permissions": ["INTERNET"]
@@ -13,6 +14,17 @@
       "bundleIdentifier": "dev.aci.mobile",
       "supportsTablet": true
     },
-    "plugins": ["expo-secure-store"]
+    "plugins": [
+      "expo-secure-store",
+      [
+        "llama.rn",
+        {
+          "enableEntitlements": true,
+          "entitlementsProfile": "production",
+          "forceCxx20": true,
+          "enableOpenCL": true
+        }
+      ]
+    ]
   }
 }
