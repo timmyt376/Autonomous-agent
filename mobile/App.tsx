@@ -6,7 +6,7 @@ import {
 import * as Device from "expo-device";
 import { StatusBar } from "expo-status-bar";
 import { addAciGoal, checkAciServer, discoverModels, saveAciMemory, sendMessage, sendToAciServer } from "./src/aci";
-import { chatWithLocalModel, downloadAndLoadLocalModel, getActiveModelPath, loadInstalledLocalModel, unloadLocalModel } from "./src/localModel";
+import { chatWithLocalModel, downloadAndLoadLocalModel, getActiveModelPath, isLocalModelLoaded, loadInstalledLocalModel, unloadLocalModel } from "./src/localModel";
 import { deleteInstalledModel, formatBytes, listInstalledModels, InstalledModel } from "./src/modelManager";
 import { getDeviceAdvice } from "./src/recommendations";
 import { buildHuggingFaceDownloadUrl, CatalogFile, CatalogModel, listGgufFiles, searchGgufModels } from "./src/catalog";
@@ -86,6 +86,7 @@ export default function App() {
   }
 
   async function updateSettings(next: ConnectionSettings) {
+    if (next.mode !== "device" && isLocalModelLoaded()) await unloadLocalModel();
     setSettings(next);
     await saveSettings(next);
   }
