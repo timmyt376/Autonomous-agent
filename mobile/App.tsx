@@ -160,7 +160,7 @@ export default function App() {
       </View>
       {tab === "chat" ? (
         <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={styles.connectionLine}><View style={styles.fill}><Text style={styles.muted}>{settings.model || "No model selected"}</Text><Text style={styles.muted}>{status}</Text></View><TouchableOpacity onPress={() => Alert.alert("Clear conversation?", "This removes the saved chat transcript from this phone.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: async () => { setMessages([]); await saveChat([]); } }])}><Text style={styles.clearText}>Clear</Text></TouchableOpacity></View>
+          <View style={styles.connectionLine}><View style={styles.fill}><Text style={styles.muted}>{(settings.mode === "aci-server" ? "ACI server" : settings.model || "No model selected")}</Text><Text style={styles.muted}>{status}</Text></View><TouchableOpacity onPress={() => Alert.alert("Clear conversation?", "This removes the saved chat transcript from this phone.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: async () => { setMessages([]); await saveChat([]); } }])}><Text style={styles.clearText}>Clear</Text></TouchableOpacity></View>
           <FlatList
             style={styles.fill}
             contentContainerStyle={styles.chatList}
