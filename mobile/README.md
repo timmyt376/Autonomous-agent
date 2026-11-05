@@ -2,49 +2,63 @@
 
 Cross-platform Expo / React Native client for the ACI project. It is a separate mobile application and does not replace the Python ACI runtime.
 
-## Features in this first mobile client
+## Features
 
-- Android and iOS app shell with a mobile chat interface.
-- Two explicit connection modes: device-local runtime and remote API.
-- OpenAI-compatible `/v1/models` discovery and `/v1/chat/completions` chat requests.
-- Model selection, connection testing, and persistent conversation settings.
-- API keys stored with the platform secure-storage facility.
+- Android and iOS app with a mobile chat interface.
+- **True on-device inference:** GGUF models run in the app process using llama.cpp via `llama.rn` (Metal on supported iPhones/iPads; CPU and supported GPU acceleration on Android).
+- Download a GGUF model from a direct URL into private app storage, then load it locally.
+- Remote API mode using OpenAI-compatible `/v1/models` and `/v1/chat/completions`.
+- Explicit mode selection. No silent cloud fallback.
+- API keys stored using the platform secure-storage facility.
 - Device model and reported memory shown as advisory compatibility information.
-- No silent cloud fallback when device mode is selected.
 
 ## Run it
 
-Install Node.js 20.19+ and the Expo tooling, then:
+Requirements: Node.js 20.19+, Android Studio / Android SDK for Android builds, and Xcode on macOS for iOS builds.
 
 ```bash
 cd mobile
 npm install
-npx expo start
+npx expo prebuild
+npx expo run:android
 ```
 
-Use Expo Go for development where supported, or build a native app with an EAS development/production build. For a local Android build, configure the Android toolchain and run `npx expo run:android`.
+For iOS on macOS:
 
-## Connecting models
+```bash
+cd mobile
+npm install
+npx expo prebuild
+npx pod-install
+npx expo run:ios
+```
 
-### On-device inference
+This app includes native modules and **will not run in standard Expo Go**. Use a development build or native build. The `llama.rn` dependency downloads native llama.cpp artifacts during installation.
 
-This app's device mode is an adapter to an OpenAI-compatible HTTP endpoint. To perform actual inference on the phone, an on-device runtime must be installed or bundled into a native build and expose that endpoint on the device (the default is `http://127.0.0.1:8080/v1`). A llama.cpp-based Android/iOS runtime is one possible implementation.
+## On-device models
 
-The current Expo client does **not** bundle model weights or a native inference engine. It does not claim that merely selecting device mode makes inference local. The endpoint must really be hosted on the phone. Runtime packaging, model download/licensing, hardware delegate selection, and native lifecycle integration are follow-on work.
+1. Choose **On this device** in Connection settings.
+2. Paste a direct download URL to a compatible `.gguf` model file.
+3. Tap **Download & load on this phone**.
+4. Wait for model initialisation, then return to Chat.
 
-A runtime hosted on a different computer is LAN inference, not on-device inference. Use that computer's reachable LAN URL.
+Use quantised GGUF models intended for mobile devices. A 1B–3B Q4 model is a reasonable starting point for many modern phones, but there is no universal minimum: actual support depends on free RAM, model architecture, context size, operating system memory limits, CPU/GPU backend, and thermal throttling. Large models can make the app crash or the phone terminate it. The initial implementation uses a 2048-token context and requests GPU offload where supported.
 
-### API mode
+Models are downloaded to the app's private document storage. The current version does not yet provide a model catalogue, download progress UI, model deletion UI, or automatic RAM-based model recommendations. Only download models from sources you trust and check their licences.
+
+The native runtime is based on [llama.rn](https://github.com/mybigday/llama.rn), a React Native binding for llama.cpp. Its Android GPU/NPU acceleration support varies by device; CPU fallback is available on supported architectures.
+
+## API mode
 
 Set the provider's OpenAI-compatible base URL, model ID, and API key. API mode sends prompts to that configured provider. The app does not proxy API traffic through the ACI desktop server.
 
-## Compatibility
+## Remote ACI server
 
-The app displays OS, device model, and reported memory when available. These are hints, not guarantees. Real compatibility depends on model architecture, quantisation, context length, RAM available to the app, NPU/GPU support, runtime build, battery and thermal constraints.
+The current API mode can connect to an OpenAI-compatible endpoint. The Python ACI server currently exposes its own native `/api/chat` API rather than the OpenAI-compatible routes, so direct ACI server integration needs a dedicated adapter in a later update.
 
-## Security notes
+## Security
 
 - API keys are stored using Expo SecureStore.
-- Local endpoints should remain bound to the device or trusted LAN.
-- Do not expose an unauthenticated model endpoint to the public internet.
-- Only use endpoints you trust. HTTP may be appropriate for loopback; use HTTPS for remote APIs.
+- Device mode performs model inference locally after downloading the GGUF file.
+- API mode sends conversation content to the configured provider.
+- Use HTTPS for remote API endpoints and do not expose unauthenticated model services to the public internet.
