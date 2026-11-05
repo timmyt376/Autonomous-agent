@@ -112,7 +112,7 @@ export default function App() {
       <StatusBar style="light" />
       <View style={styles.header}>
         <View><Text style={styles.brand}>ACI <Text style={styles.mobile}>MOBILE</Text></Text><Text style={styles.sub}>Autonomous Cognitive Intelligence</Text></View>
-        <View style={styles.modePill}><View style={[styles.dot, { backgroundColor: isDeviceMode ? colors.amber : colors.blue }]} /><Text style={styles.modeText}>{isDeviceMode ? "ON DEVICE" : "API"}</Text></View>
+        <View style={styles.modePill}><View style={[styles.dot, { backgroundColor: isDeviceMode ? colors.amber : colors.blue }]} /><Text style={styles.modeText}>{settings.mode === "device" ? "ON DEVICE" : settings.mode === "aci-server" ? "ACI SERVER" : "API"}</Text></View>
       </View>
       <View style={styles.tabs}>
         <TouchableOpacity onPress={() => setTab("chat")} style={[styles.tab, tab === "chat" && styles.tabActive]}><Text style={styles.tabText}>Chat</Text></TouchableOpacity>
@@ -170,7 +170,8 @@ export default function App() {
             <>
               <Text style={styles.label}>Direct GGUF model URL</Text>
               <TextInput value={settings.modelUrl} onChangeText={value => updateSettings({ ...settings, modelUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="https://huggingface.co/.../model.Q4_K_M.gguf" placeholderTextColor={colors.muted} />
-              <Text style={styles.help}>Paste a direct download link to a GGUF file. It will be saved in private app storage and loaded by llama.cpp on this phone.</Text>
+              <Text style={styles.help}>Paste a direct HTTPS download link to a GGUF file. It will be saved in private app storage and loaded by llama.cpp on this phone.</Text>
+              {downloadProgress !== null ? <View><Text style={styles.help}>Download progress: {(downloadProgress * 100).toFixed(0)}%</Text><View style={styles.progressTrack}><View style={[styles.progressFill, { width: (Math.max(0, Math.min(100, downloadProgress * 100))) + "%" }]} /></View></View> : null}
               <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Download & load on this phone</Text></TouchableOpacity>
             </>
           ) : settings.mode === "aci-server" ? (
@@ -251,5 +252,10 @@ const styles = StyleSheet.create({
   status: { color: colors.amber, fontSize: 12 },
   modelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.panel, padding: 12, borderRadius: 9 },
   modelText: { color: colors.text, fontSize: 13, flex: 1 },
+  modelActions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  smallButton: { backgroundColor: colors.blue, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 9, alignItems: "center", alignSelf: "flex-start" },
+  smallDanger: { backgroundColor: colors.danger, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 9, alignItems: "center", alignSelf: "flex-start" },
+  progressTrack: { height: 7, backgroundColor: colors.panel2, borderRadius: 6, overflow: "hidden" },
+  progressFill: { height: 7, backgroundColor: colors.blue },
   infoCard: { backgroundColor: colors.panel, padding: 14, borderRadius: 12, gap: 7, marginTop: 6 },
 });
