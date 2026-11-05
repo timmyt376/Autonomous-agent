@@ -140,6 +140,23 @@ export default function App() {
             <TouchableOpacity onPress={send} disabled={busy || !draft.trim()} style={[styles.send, (busy || !draft.trim()) && styles.disabled]}>{busy ? <ActivityIndicator color="white" /> : <Text style={styles.sendText}>Send</Text>}</TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+      ) : tab === "models" ? (
+        <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent}>
+          <Text style={styles.sectionTitle}>On-device model library</Text>
+          <Text style={styles.help}>Downloaded GGUF models stay in this app private storage. Load a model for offline use or delete it to reclaim space.</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => refreshModels()}><Text style={styles.primaryText}>Refresh library</Text></TouchableOpacity>
+          {installedModels.length === 0 ? <Text style={styles.help}>No models downloaded yet. Choose On device in Connection to add a GGUF model.</Text> : installedModels.map(model => (
+            <View key={model.uri} style={styles.infoCard}>
+              <Text style={styles.modelText}>{model.name}</Text>
+              <Text style={styles.help}>{formatBytes(model.sizeBytes)} · {getActiveModelPath() === model.uri ? "Currently loaded" : "Stored on device"}</Text>
+              <View style={styles.modelActions}>
+                <TouchableOpacity style={styles.smallButton} onPress={async () => { try { setStatus("Loading model…"); await loadInstalledLocalModel(model.uri); setStatus("Loaded " + model.name); if (settings) await updateSettings({ ...settings, mode: "device", model: model.name }); } catch (e) { setStatus(e instanceof Error ? e.message : "Could not load model"); } }}><Text style={styles.primaryText}>Load</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.smallDanger} onPress={() => Alert.alert("Delete model?", "Remove " + model.name + " from this phone?", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: async () => { try { if (getActiveModelPath() === model.uri) await unloadLocalModel(); await deleteInstalledModel(model.uri); await refreshModels(); setStatus("Model deleted"); } catch (e) { Alert.alert("Delete failed", e instanceof Error ? e.message : "Unknown error"); } } }])}><Text style={styles.primaryText}>Delete</Text></TouchableOpacity>
+              </View>
+            </View>
+          ))}
+          <Text style={styles.status}>{status}</Text>
+        </ScrollView>
       ) : (
         <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.sectionTitle}>Model location</Text>
