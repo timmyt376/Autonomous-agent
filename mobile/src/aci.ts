@@ -1,4 +1,4 @@
-import { ChatMessage, ConnectionSettings, ModelInfo } from "./types";
+import type { ChatMessage, ConnectionSettings, ModelInfo } from "./types";
 
 function endpoint(baseUrl: string, path: string): string {
   return baseUrl.replace(/\/+$/, "") + path;
