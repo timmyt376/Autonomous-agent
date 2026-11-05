@@ -161,8 +161,9 @@ export default function App() {
         <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.sectionTitle}>Model location</Text>
           <View style={styles.segment}>
-            <TouchableOpacity onPress={() => updateSettings({ ...settings, mode: "device", baseUrl: "http://127.0.0.1:8080/v1" })} style={[styles.segmentButton, isDeviceMode && styles.segmentSelected]}><Text style={styles.segmentText}>On this device</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => updateSettings({ ...settings, mode: "api" })} style={[styles.segmentButton, !isDeviceMode && styles.segmentSelected]}><Text style={styles.segmentText}>API provider</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => updateSettings({ ...settings, mode: "device" })} style={[styles.segmentButton, settings.mode === "device" && styles.segmentSelected]}><Text style={styles.segmentText}>On device</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => updateSettings({ ...settings, mode: "api" })} style={[styles.segmentButton, settings.mode === "api" && styles.segmentSelected]}><Text style={styles.segmentText}>API</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => updateSettings({ ...settings, mode: "aci-server" })} style={[styles.segmentButton, settings.mode === "aci-server" && styles.segmentSelected]}><Text style={styles.segmentText}>ACI server</Text></TouchableOpacity>
           </View>
           <Text style={styles.help}>{modeDescription}</Text>
           {isDeviceMode ? (
@@ -171,6 +172,19 @@ export default function App() {
               <TextInput value={settings.modelUrl} onChangeText={value => updateSettings({ ...settings, modelUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="https://huggingface.co/.../model.Q4_K_M.gguf" placeholderTextColor={colors.muted} />
               <Text style={styles.help}>Paste a direct download link to a GGUF file. It will be saved in private app storage and loaded by llama.cpp on this phone.</Text>
               <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Download & load on this phone</Text></TouchableOpacity>
+            </>
+          ) : settings.mode === "aci-server" ? (
+            <>
+              <Text style={styles.label}>ACI server URL</Text>
+              <TextInput value={settings.baseUrl} onChangeText={value => updateSettings({ ...settings, baseUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="http://192.168.1.20:8765" placeholderTextColor={colors.muted} />
+              <Text style={styles.help}>Use your computer LAN IP and ACI port 8765. The server must listen on the LAN interface. Do not expose it publicly without authentication and HTTPS.</Text>
+              <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Test ACI server</Text></TouchableOpacity>
+              <Text style={styles.label}>Memory note</Text>
+              <TextInput value={memoryDraft} onChangeText={setMemoryDraft} style={styles.field} placeholder="Something ACI should remember" placeholderTextColor={colors.muted} />
+              <TouchableOpacity style={styles.smallButton} onPress={async () => { try { await saveAciMemory(settings.baseUrl, memoryDraft); setMemoryDraft(""); Alert.alert("Saved", "Memory saved to your ACI server."); } catch (e) { Alert.alert("Could not save", e instanceof Error ? e.message : "Unknown error"); } }}><Text style={styles.primaryText}>Save memory</Text></TouchableOpacity>
+              <Text style={styles.label}>Goal</Text>
+              <TextInput value={goalDraft} onChangeText={setGoalDraft} style={styles.field} placeholder="A goal for ACI to track" placeholderTextColor={colors.muted} />
+              <TouchableOpacity style={styles.smallButton} onPress={async () => { try { await addAciGoal(settings.baseUrl, goalDraft); setGoalDraft(""); Alert.alert("Added", "Goal added to your ACI server."); } catch (e) { Alert.alert("Could not add goal", e instanceof Error ? e.message : "Unknown error"); } }}><Text style={styles.primaryText}>Add goal</Text></TouchableOpacity>
             </>
           ) : (
             <>
