@@ -7,11 +7,13 @@ import * as Device from "expo-device";
 import { StatusBar } from "expo-status-bar";
 import { addAciGoal, checkAciServer, discoverModels, saveAciMemory, sendMessage, sendToAciServer } from "./src/aci";
 import { chatWithLocalModel, downloadAndLoadLocalModel, getActiveModelPath, isLocalModelLoaded, loadInstalledLocalModel, unloadLocalModel } from "./src/localModel";
-import { deleteInstalledModel, formatBytes, listInstalledModels, InstalledModel } from "./src/modelManager";
+import { deleteInstalledModel, formatBytes, listInstalledModels } from "./src/modelManager";
+import type { InstalledModel } from "./src/modelManager";
 import { getDeviceAdvice } from "./src/recommendations";
-import { buildHuggingFaceDownloadUrl, CatalogFile, CatalogModel, listGgufFiles, searchGgufModels } from "./src/catalog";
+import { buildHuggingFaceDownloadUrl, listGgufFiles, searchGgufModels } from "./src/catalog";
+import type { CatalogFile, CatalogModel } from "./src/catalog";
 import { loadChat, loadSettings, saveChat, saveSettings } from "./src/storage";
-import { ChatMessage, ConnectionSettings } from "./src/types";
+import type { ChatMessage, ConnectionSettings } from "./src/types";
 
 const colors = {
   bg: "#0b0f1a", panel: "#121a29", panel2: "#182338",
