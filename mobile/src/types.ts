@@ -1,4 +1,4 @@
-export type ProviderMode = "device" | "api";
+export type ProviderMode = "device" | "api" | "aci-server";
 
 export type ConnectionSettings = {
   mode: ProviderMode;
