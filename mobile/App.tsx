@@ -5,9 +5,11 @@ import {
 } from "react-native";
 import * as Device from "expo-device";
 import { StatusBar } from "expo-status-bar";
-import { discoverModels, sendMessage } from "./src/aci";
-import { chatWithLocalModel, downloadAndLoadLocalModel } from "./src/localModel";
-import { loadSettings, saveSettings } from "./src/storage";
+import { addAciGoal, checkAciServer, discoverModels, saveAciMemory, sendMessage, sendToAciServer } from "./src/aci";
+import { chatWithLocalModel, downloadAndLoadLocalModel, getActiveModelPath, loadInstalledLocalModel, unloadLocalModel } from "./src/localModel";
+import { deleteInstalledModel, formatBytes, listInstalledModels, InstalledModel } from "./src/modelManager";
+import { getDeviceAdvice } from "./src/recommendations";
+import { loadChat, loadSettings, saveChat, saveSettings } from "./src/storage";
 import { ChatMessage, ConnectionSettings } from "./src/types";
 
 const colors = {
@@ -23,23 +25,33 @@ function makeId(): string {
 export default function App() {
   const [settings, setSettings] = useState<ConnectionSettings | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [installedModels, setInstalledModels] = useState<InstalledModel[]>([]);
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+  const [memoryDraft, setMemoryDraft] = useState("");
+  const [goalDraft, setGoalDraft] = useState("");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"chat" | "settings">("chat");
+  const [tab, setTab] = useState<"chat" | "settings" | "models">("chat");
   const [status, setStatus] = useState("Not connected");
   const [models, setModels] = useState<string[]>([]);
   const [deviceInfo, setDeviceInfo] = useState("Checking device…");
 
   useEffect(() => {
     loadSettings().then(setSettings).catch(() => Alert.alert("Storage error", "Could not load ACI settings."));
+    loadChat().then(setMessages).catch(() => undefined);
+    refreshModels().catch(() => undefined);
     const memory = Device.totalMemory ? `${(Device.totalMemory / 1024 ** 3).toFixed(1)} GB RAM reported` : "Device memory information unavailable";
     setDeviceInfo(`${Device.manufacturer ?? "Device"} ${Device.modelName ?? ""} · ${Platform.OS} · ${memory}`);
   }, []);
 
   const isDeviceMode = settings?.mode === "device";
-  const modeDescription = useMemo(() => isDeviceMode
-    ? "Run a GGUF model directly on this phone with the bundled llama.cpp native runtime."
-    : "API mode. Prompts are sent to the provider URL you configure.", [isDeviceMode]);
+  const modeDescription = useMemo(() => {
+    if (settings?.mode === "device") return "Run a GGUF model directly on this phone with llama.cpp.";
+    if (settings?.mode === "aci-server") return "Send messages to your own ACI Python server.";
+    return "Send messages to an OpenAI-compatible model provider.";
+  }, [settings?.mode]);
+
+  async function refreshModels() { setInstalledModels(await listInstalledModels()); }
 
   async function updateSettings(next: ConnectionSettings) {
     setSettings(next);
@@ -48,20 +60,27 @@ export default function App() {
 
   async function connect() {
     if (!settings) return;
-    setStatus("Checking…");
+    setStatus("Connecting…");
     try {
       if (settings.mode === "device") {
-        const result = await downloadAndLoadLocalModel(settings.modelUrl);
+        setDownloadProgress(0);
+        const result = await downloadAndLoadLocalModel(settings.modelUrl, setDownloadProgress);
+        const modelName = settings.modelUrl.split("?")[0].split("/").pop() ?? "On-device GGUF";
+        await updateSettings({ ...settings, model: modelName });
         setStatus(result);
-        setModels([settings.model || "On-device GGUF"]);
+        await refreshModels();
+      } else if (settings.mode === "aci-server") {
+        setStatus(await checkAciServer(settings.baseUrl));
       } else {
         const found = await discoverModels(settings);
         setModels(found.map(item => item.id));
-        setStatus("Connected · " + found.length + " model(s)");
+        setStatus(found.length ? "Connected · " + found.length + " model(s)" : "Connected · no models found");
         if (!settings.model && found[0]) await updateSettings({ ...settings, model: found[0].id });
       }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Connection failed");
+    } finally {
+      setDownloadProgress(null);
     }
   }
 
