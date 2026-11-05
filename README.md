@@ -7,7 +7,7 @@ ACI is a local-first, cross-platform cognitive agent project. The repository con
 ## Projects
 
 - **Desktop/server runtime:** Python, FastAPI, SQLite memory, goal tracking, and an Ollama-compatible model connection.
-- **Mobile client:** [mobile/](mobile/) — Android and iOS app built with Expo / React Native. It supports explicit device-local runtime and remote OpenAI-compatible API connection modes.
+- **Mobile client:** [mobile/](mobile/) — Android and iOS app built with Expo / React Native. It supports on-device GGUF inference, a Hugging Face model catalogue, persistent chat, OpenAI-compatible APIs, and direct authenticated ACI server connections.
 
 ## Desktop/server quick start
 
@@ -44,7 +44,7 @@ npx expo prebuild
 npx expo run:android
 ```
 
-The mobile app uses native llama.cpp bindings and does not run in standard Expo Go. See [mobile/README.md](mobile/README.md) for iOS build steps and model connection setup.
+The mobile app uses native llama.cpp bindings and does not run in standard Expo Go. See [mobile/README.md](mobile/README.md) for iOS build steps, EAS build profiles, model management, and secure server setup.
 
 **Mobile:** ACI Mobile supports local GGUF inference through llama.cpp, a downloaded-model library, persistent chat, OpenAI-compatible APIs, and direct ACI server connections with optional bearer-token authentication. See [mobile/README.md](mobile/README.md).
 
