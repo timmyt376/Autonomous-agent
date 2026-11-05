@@ -6,7 +6,7 @@ Cross-platform Expo / React Native companion app for the ACI desktop/server runt
 
 - Android and iOS chat client with persistent local conversation history.
 - **On-device inference:** llama.cpp via llama.rn; compatible GGUF models execute on the phone.
-- Download progress, installed-model library, load and delete controls.
+- Searchable Hugging Face GGUF catalogue, file-size display, download progress, installed-model library, load and delete controls.
 - Device RAM-based starting recommendations (advisory only).
 - OpenAI-compatible API mode for hosted or LAN inference endpoints.
 - Direct ACI server mode for the Python runtime: chat, memory notes and goals.
@@ -33,7 +33,7 @@ iOS (on macOS):
     npx pod-install
     npx expo run:ios
 
-For a distributable Android build, use an EAS or local Gradle release build after configuring Android signing credentials. For iOS distribution, configure Apple signing and provisioning.
+EAS profiles are included in eas.json. Install the EAS CLI and run eas build --platform android --profile preview for an installable APK, or eas build --platform android --profile production for a Play Store app bundle. iOS builds require macOS/Xcode locally or EAS cloud builds, plus Apple signing and provisioning.
 
 ## On-device models
 
@@ -46,7 +46,7 @@ The app uses a 2048-token context and requests GPU layer offload; actual acceler
 
 The app shows rough model-size guidance based on total reported device RAM. It cannot know how much memory is currently free, and Android/iOS may terminate an app that exceeds memory limits. Start with a small quantised model, close other demanding apps, and increase model size cautiously. Model compatibility also depends on architecture, tokenizer, quantisation, context size, and thermal throttling.
 
-Models are stored in the app's private document directory. Removing the app removes those files. Only download models from sources you trust and check model licences. The app does not ship model weights.
+Models are stored in the app's private document directory. Removing the app removes those files. Only download models from sources you trust and check model licences. The app does not ship model weights. The catalogue uses the public Hugging Face model API; search results, files, publishers and licences are third-party information.
 
 ## OpenAI-compatible API mode
 
@@ -61,7 +61,7 @@ Enter the provider's base URL (the URL before /models), model ID and optional AP
 5. In the app choose **ACI server**, enter http://COMPUTER-LAN-IP:8765, and enter the same bearer token.
 6. Test the connection.
 
-The token protects all /api/* routes using Bearer authentication. Keep the service on a trusted private network or put it behind a properly configured HTTPS reverse proxy. Do not port-forward the service to the public internet. If you do not set a token, the server retains its original unauthenticated API behaviour; keep its default loopback binding in that case.
+The token protects all /api/* routes using Bearer authentication. The mobile build permits local-network HTTP so LAN endpoints can work; bearer tokens sent over HTTP are visible to other parties on that network. Use only a trusted private Wi-Fi network, or preferably use HTTPS through a properly configured reverse proxy. Do not port-forward the service to the public internet. If you do not set a token, the server retains its original unauthenticated API behaviour; keep its default loopback binding in that case.
 
 ACI server mode sends each new user message to the server's /api/chat endpoint. The server owns its model context and persistent memory. Mobile conversation history is also saved locally for display, but that local transcript is not replayed into the server.
 
