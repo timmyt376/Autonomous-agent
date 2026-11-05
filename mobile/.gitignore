@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
