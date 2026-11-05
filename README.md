@@ -45,7 +45,7 @@ npx expo start
 
 See [mobile/README.md](mobile/README.md) for Android/iOS build steps and model connection setup.
 
-**Important local-model distinction:** the current mobile app is a client for an OpenAI-compatible endpoint. For genuine on-phone inference, a compatible native runtime must be installed or bundled into the mobile build and expose its endpoint on the phone. The app does not yet bundle model weights or an inference engine. A runtime on another computer is LAN inference, not on-device inference. API mode sends prompts to the configured provider.
+**On-device inference:** the mobile app bundles llama.cpp through `llama.rn` and can download and run compatible GGUF models directly on supported Android and iOS devices. It also supports OpenAI-compatible remote API providers. Device compatibility depends on architecture, available memory, model quantisation, and acceleration support; see [mobile/README.md](mobile/README.md).
 
 ## Desktop configuration
 
