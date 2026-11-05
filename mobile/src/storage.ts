@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import { ChatMessage, ConnectionSettings } from "./types";
+import type { ChatMessage, ConnectionSettings } from "./types";
 
 const SETTINGS_KEY = "aci.mobile.settings.v1";
 const API_KEY_KEY = "aci.mobile.api-key.v1";
