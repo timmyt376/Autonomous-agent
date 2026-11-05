@@ -4,6 +4,7 @@ export type ConnectionSettings = {
   mode: ProviderMode;
   baseUrl: string;
   model: string;
+  modelUrl: string;
   apiKey: string;
 };
 
