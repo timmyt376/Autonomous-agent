@@ -78,3 +78,20 @@ npm run typecheck
 ## License
 
 MIT
+
+## DeepSeek and local model management
+
+ACI supports the official DeepSeek OpenAI-compatible API. Use the API base URL
+https://api.deepseek.com and model IDs deepseek-flash or deepseek-v4-pro.
+On desktop, save the key through the ACI web interface (stored in the OS
+credential store where available), or set DEEPSEEK_API_KEY in .env. On mobile,
+select API mode and enter the same base URL, model ID and key; the key is stored
+using Expo SecureStore.
+
+The desktop web interface includes a local model manager for searching its
+built-in Ollama model catalogue, downloading models with progress, selecting
+installed models and deleting them. Install Ollama once as the desktop local
+inference engine. The mobile app includes its own in-app GGUF catalogue,
+download, load, unload and delete workflow using llama.cpp.
+
+See docs/DEEPSEEK_AND_LOCAL_MODELS.md for setup and provider details.
