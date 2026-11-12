@@ -16,6 +16,7 @@ from .memory import Memory
 from .llm import DeepSeekClient, OllamaClient, OpenAICompatibleClient
 from .cognition import Cognition
 from .harness import create_identity
+from . import device_api
 from .device_api import router as device_router
 from .device_tools import hardware_advice
 
@@ -31,6 +32,7 @@ active_provider = settings.provider if settings.provider in {"ollama", "deepseek
 active_model = settings.deepseek_model if active_provider == "deepseek" else settings.openai_model if active_provider == "openai" else settings.model
 openai_client = OpenAICompatibleClient(settings.openai_base_url, settings.openai_model, settings.openai_api_key)
 cognition = Cognition(deepseek if active_provider == "deepseek" else openai_client if active_provider == "openai" else ollama, memory, settings.max_context_messages)
+device_api.active_cognition = cognition
 
 pull_state = {
     "active": False,
