@@ -152,7 +152,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}.item{padding:12px;background:#1
 <section><h2>Conversation</h2><textarea id="msg" placeholder="Talk to ACI…" rows="4"></textarea><button onclick="send()">Send</button><pre id="reply"></pre></section>
 <section><h2>Persistent memory</h2><textarea id="note" placeholder="A fact or experience ACI should remember" rows="4"></textarea><button onclick="saveNote()">Remember</button><pre id="noteResult"></pre></section>
 </div>
-<section><h2>Local model manager</h2>
+<section><h2>Local model manager</h2><p class="help">Automatically detect hardware and choose a suitable model, or manage the catalogue yourself.</p><button onclick="autoPickModel()">Auto-pick model for this computer</button><button class="secondary" onclick="detectServices()">Detect Ollama / ComfyUI</button><pre id="serviceStatus" class="muted"></pre>
 <p class="help">Find, download, load and remove local models from this interface. The desktop runtime uses the Ollama service as its local inference engine; install Ollama once, then manage models here.</p>
 <label>Search model catalogue</label><input id="catalogQuery" placeholder="Search e.g. qwen, gemma, deepseek" oninput="filterCatalog()">
 <div id="catalog"></div>
@@ -161,6 +161,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}.item{padding:12px;background:#1
 <div class="bar"><div id="pullBar"></div></div><pre id="pullStatus" class="muted"></pre>
 <h3>Installed models</h3><button class="secondary" onclick="refreshModels()">Refresh installed models</button><div id="installed"></div>
 </section>
+<section><h2>Workspace files</h2><p class="help">ACI can browse and edit files only inside its configured workspace folder. Place files here or change ACI_WORKSPACE in .env. It cannot silently browse your entire computer.</p><button onclick="browseWorkspace()">Refresh workspace</button><div id="workspaceFiles"></div><label>Selected text file</label><input id="workspacePath" placeholder="relative/path.txt"><textarea id="workspaceEditor" rows="10" placeholder="Select a text file to edit"></textarea><button onclick="saveWorkspaceFile()">Save file</button><label>New file path</label><input id="newWorkspacePath" placeholder="notes/new-file.txt"><button onclick="createWorkspaceFile()">Create file</button><pre id="workspaceStatus" class="muted"></pre></section>
+<section><h2>Image generation · ComfyUI</h2><p class="help">Connect a ComfyUI server and paste a workflow exported in API format. Use the prompt placeholders in the workflow's text nodes.</p><label>ComfyUI endpoint</label><input id="comfyUrl" value="http://127.0.0.1:8188"><label>Image prompt</label><textarea id="imagePrompt" rows="3" placeholder="Describe an image"></textarea><label>ComfyUI API workflow JSON</label><textarea id="comfyWorkflow" rows="8" placeholder="Paste API-format workflow JSON"></textarea><button onclick="runImageGeneration()">Generate image</button><pre id="imageStatus" class="muted"></pre><div id="generatedImages"></div></section>
 <section><h2>Runtime status</h2><pre id="status">Loading…</pre></section>
 <script>
 function headers(){const h={'Content-Type':'application/json'};const t=document.getElementById('token').value.trim();if(t)h.Authorization='Bearer '+t;return h}
