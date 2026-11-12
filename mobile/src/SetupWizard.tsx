@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as Device from "expo-device";
 import type { ConnectionSettings } from "./types";
-import { searchGgufModels, listGgufFiles, buildHuggingFaceDownloadUrl } from "./catalog";
+import { listGgufFiles, buildHuggingFaceDownloadUrl } from "./catalog";
 import { downloadAndLoadLocalModel } from "./localModel";
 
 const palette = { bg: "#0b0f1a", panel: "#121a29", border: "#263650", blue: "#4a7dff", amber: "#f5b84d", text: "#eef3ff", muted: "#9aa9c2" };
@@ -30,14 +30,11 @@ export function SetupWizard({ onComplete }: { onComplete: (settings: ConnectionS
   async function autoPickPhoneModel() {
     setBusy(true); setStatus("Finding a small model compatible with this phone…");
     try {
-      const repositories = await searchGgufModels("Qwen3 0.6B GGUF");
-      const repo = repositories.find(item => item.id.toLowerCase() === "qwen/qwen3-0.6b-gguf")
-        ?? repositories.find(item => item.id.toLowerCase().includes("qwen3-0.6b") && item.id.toLowerCase().includes("gguf"));
-      if (!repo) throw new Error("No trusted Qwen3 0.6B GGUF catalogue entry was found. Try the local-server option instead.");
-      const files = await listGgufFiles(repo.id);
+      const repoId = "Qwen/Qwen3-0.6B-GGUF";
+      const files = await listGgufFiles(repoId);
       const selected = files.find(file => /q4_k_m/i.test(file.name)) ?? files.find(file => /q4/i.test(file.name)) ?? files[0];
       if (!selected) throw new Error("The selected model repository contains no GGUF files.");
-      const url = buildHuggingFaceDownloadUrl(repo.id, selected.name);
+      const url = buildHuggingFaceDownloadUrl(repoId, selected.name);
       setStatus("Downloading " + selected.name + " · " + (selected.size ? (selected.size / 1024 ** 3).toFixed(2) + " GB" : "size unknown"));
       const result = await downloadAndLoadLocalModel(url);
       await finish({ mode: "device", baseUrl: "", model: selected.name, modelUrl: url, apiKey: "", comfyUrl });
