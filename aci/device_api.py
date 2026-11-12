@@ -130,8 +130,20 @@ async def image_status(prompt_id: str, base_url: str = Query(default="http://127
 
 @router.post("/api/setup/install/ollama")
 async def install_ollama():
-    if shutil.which("ollama"):
-        return {"started": False, "installed": True, "message": "Ollama is already installed."}
+    executable = shutil.which("ollama")
+    if executable:
+        try:
+            async with httpx.AsyncClient(timeout=2) as client:
+                response = await client.get(settings.ollama_url.rstrip("/") + "/api/tags")
+                if response.is_success:
+                    return {"started": False, "installed": True, "message": "Ollama is already running."}
+        except Exception:
+            pass
+        try:
+            subprocess.Popen([executable, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+            return {"started": True, "installed": True, "message": "Ollama service start requested. Refresh service detection in a few seconds."}
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"Could not start Ollama: {exc}")
     if sys.platform == "win32":
         winget = shutil.which("winget")
         if not winget:
