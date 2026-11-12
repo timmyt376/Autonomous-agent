@@ -129,7 +129,7 @@ def hardware_advice() -> dict[str, Any]:
                 pass
     gpu_name = None
     gpu_vram_gb = 0.0
-    nvidia_smi = shutil.which("nvidia-smi") if "shutil" in globals() else None
+    nvidia_smi = shutil.which("nvidia-smi")
     if nvidia_smi:
         try:
             result = subprocess.run([nvidia_smi, "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=4, check=True)
