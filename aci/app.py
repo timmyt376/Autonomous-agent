@@ -12,6 +12,7 @@ from .config import settings, store_deepseek_api_key
 from .memory import Memory
 from .llm import DeepSeekClient, OllamaClient
 from .cognition import Cognition
+from .harness import create_identity
 
 memory = Memory(settings.data_dir / "aci.sqlite3")
 ollama = OllamaClient(settings.ollama_url, settings.model)
@@ -72,6 +73,10 @@ class ModelInput(BaseModel):
     model: str = Field(min_length=1, max_length=120)
 
 
+class HarnessInput(BaseModel):
+    seed_context: str = Field(default="", max_length=12000)
+
+
 app = FastAPI(title="ACI Runtime", version="0.3.0")
 
 
@@ -110,6 +115,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}.item{padding:12px;background:#1
 <label>DeepSeek API key</label><input id="deepseekKey" type="password" placeholder="Paste key here; saved securely">
 <button onclick="saveDeepSeek()">Save DeepSeek key</button><button onclick="setProvider()">Activate provider</button>
 <pre id="providerStatus" class="muted"></pre></section>
+<section><h2>First-run identity harness</h2><p class="help">Before chat starts, ACI sends its foundational context to the selected model. The model chooses its own name, personality, values, interests, first thought, self-description and profile portrait prompt. Its identity is saved and reused on future launches.</p><label>Foundational context</label><textarea id="seedContext" rows="5">ACI is a new local-first cognitive system. Form a distinct, revisable identity. Develop hybrid memory, computational affect, curiosity, independent preferences, social boundaries, trust and self-reflection over time. Respect privacy, consent, safety and user autonomy. This is a computational self-model, not a claim of consciousness.</textarea><button onclick="initializeHarness()">Create AI identity</button><pre id="identityResult" class="muted"></pre></section>
 <div class="grid">
 <section><h2>Conversation</h2><textarea id="msg" placeholder="Talk to ACI…" rows="4"></textarea><button onclick="send()">Send</button><pre id="reply"></pre></section>
 <section><h2>Persistent memory</h2><textarea id="note" placeholder="A fact or experience ACI should remember" rows="4"></textarea><button onclick="saveNote()">Remember</button><pre id="noteResult"></pre></section>
@@ -127,11 +133,12 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}.item{padding:12px;background:#1
 <script>
 function headers(){const h={'Content-Type':'application/json'};const t=document.getElementById('token').value.trim();if(t)h.Authorization='Bearer '+t;return h}
 async function api(path,method='GET',body){const r=await fetch(path,{method,headers:headers(),body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({detail:r.statusText}));if(!r.ok)throw new Error(d.detail||('HTTP '+r.status));return d}
+async function initializeHarness(){const o=document.getElementById('identityResult');o.textContent='Forming identity…';try{const d=await api('/api/harness/initialize','POST',{seed_context:document.getElementById('seedContext').value});const p=d.profile;o.textContent=JSON.stringify({name:p.name,short_description:p.short_description,personality:p.personality,values:p.values,interests:p.interests,first_thought:p.first_thought,self_description:p.self_description,avatar_prompt:p.avatar_prompt},null,2)}catch(e){o.textContent=e.message}}
 async function send(){const m=document.getElementById('msg').value.trim();if(!m)return;const o=document.getElementById('reply');o.textContent='Thinking…';try{const d=await api('/api/chat','POST',{message:m});o.textContent=d.reply||'No response'}catch(e){o.textContent=e.message}}
 async function saveNote(){try{const d=await api('/api/memory','POST',{content:document.getElementById('note').value});document.getElementById('noteResult').textContent=JSON.stringify(d)}catch(e){document.getElementById('noteResult').textContent=e.message}}
 async function saveDeepSeek(){try{const d=await api('/api/settings/deepseek','POST',{api_key:document.getElementById('deepseekKey').value,model:document.getElementById('providerModel').value||'deepseek-flash'});document.getElementById('deepseekKey').value='';document.getElementById('providerStatus').textContent=d.message}catch(e){document.getElementById('providerStatus').textContent=e.message}}
 async function setProvider(){try{const d=await api('/api/provider','POST',{provider:document.getElementById('provider').value,model:document.getElementById('providerModel').value});document.getElementById('providerStatus').textContent=d.message;await refresh()}catch(e){document.getElementById('providerStatus').textContent=e.message}}
-async function refresh(){try{const d=await api('/api/status');document.getElementById('status').textContent=JSON.stringify(d,null,2);document.getElementById('provider').value=d.provider;document.getElementById('providerModel').value=d.model||''}catch(e){document.getElementById('status').textContent=e.message}await refreshModels()}
+async function refresh(){try{const d=await api('/api/status');document.getElementById('status').textContent=JSON.stringify(d,null,2);try{const identity=await api('/api/identity');if(identity.initialized){document.getElementById('identityResult').textContent=JSON.stringify(identity.profile,null,2)}else{document.getElementById('identityResult').textContent='Not initialized — create an identity before starting chat.'}}catch(e){}document.getElementById('provider').value=d.provider;document.getElementById('providerModel').value=d.model||''}catch(e){document.getElementById('status').textContent=e.message}await refreshModels()}
 async function refreshModels(){try{const d=await api('/api/models');const el=document.getElementById('installed');el.innerHTML='';for(const m of d.models){const row=document.createElement('div');row.className='item';const label=document.createElement('span');label.textContent=m.name+(m.size?' · '+(m.size/1073741824).toFixed(2)+' GB':'');const actions=document.createElement('span');const load=document.createElement('button');load.textContent='Load';load.onclick=()=>selectModel(m.name);const del=document.createElement('button');del.textContent='Delete';del.className='danger';del.onclick=()=>deleteModel(m.name);actions.append(load,del);row.append(label,actions);el.append(row)}}catch(e){document.getElementById('installed').textContent=e.message}}
 async function filterCatalog(){try{const q=document.getElementById('catalogQuery').value;const d=await api('/api/models/catalog?q='+encodeURIComponent(q));const el=document.getElementById('catalog');el.innerHTML='';for(const m of d.models){const row=document.createElement('div');row.className='item';const label=document.createElement('span');label.textContent=m.name;const desc=document.createElement('small');desc.textContent=m.family+' · '+m.description;label.append(desc);const btn=document.createElement('button');btn.textContent='Download';btn.onclick=()=>pullModel(m.name);row.append(label,btn);el.append(row)}}catch(e){document.getElementById('catalog').textContent=e.message}}
 async function pullModel(name){if(!name)return;try{await api('/api/models/pull','POST',{model:name});document.getElementById('pullStatus').textContent='Starting download: '+name;pollPull()}catch(e){document.getElementById('pullStatus').textContent=e.message}}
@@ -163,6 +170,8 @@ async def status():
         "available_models": [m.get("name") or m.get("model") for m in local_models],
         "affect": cognition.affect.as_dict(),
         "goals": memory.goals(),
+        "identity_initialized": bool(memory.get_state("identity_profile")),
+        "identity_name": (memory.get_state("identity_profile") or {}).get("name"),
     }
 
 
@@ -311,6 +320,8 @@ async def delete_local_model(body: ModelInput):
 
 @app.post("/api/chat")
 async def chat(body: ChatInput):
+    if not memory.get_state("identity_profile"):
+        raise HTTPException(status_code=409, detail="Complete the first-run identity harness before starting chat.")
     try:
         return {"reply": await cognition.respond(body.message)}
     except Exception as exc:
@@ -336,6 +347,21 @@ async def add_goal(body: NoteInput):
 @app.get("/api/goals")
 async def goals():
     return {"items": memory.goals()}
+
+
+@app.get("/api/identity")
+async def get_identity():
+    profile = memory.get_state("identity_profile")
+    return {"initialized": bool(profile), "profile": profile}
+
+
+@app.post("/api/harness/initialize")
+async def initialize_harness(body: HarnessInput):
+    try:
+        profile = await create_identity(cognition.llm, memory, body.seed_context)
+        return {"initialized": True, "profile": profile}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Identity bootstrap failed: {exc}")
 
 
 def main():

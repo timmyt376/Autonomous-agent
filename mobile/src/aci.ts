@@ -40,7 +40,8 @@ export async function discoverModels(settings: ConnectionSettings): Promise<Mode
 export async function sendMessage(
   settings: ConnectionSettings,
   history: ChatMessage[],
-  message: string
+  message: string,
+  systemPrompt?: string
 ): Promise<string> {
   if (!settings.baseUrl.trim()) throw new Error("Enter a model endpoint in Settings.");
   if (!settings.model.trim()) throw new Error("Choose a model in Settings.");
@@ -48,7 +49,7 @@ export async function sendMessage(
     throw new Error("Add your DeepSeek API key in Connection settings.");
   }
   const messages = [
-    { role: "system", content: "You are ACI, a helpful personal AI assistant. Be clear about uncertainty. Do not claim to be conscious or to have real feelings." },
+    { role: "system", content: systemPrompt ?? "You are ACI, a helpful personal AI assistant. Be clear about uncertainty. Do not claim to be conscious or to have real feelings." },
     ...history.slice(-20).map(item => ({ role: item.role, content: item.content })),
     { role: "user", content: message }
   ];
@@ -69,6 +70,18 @@ export async function sendMessage(
 export async function checkConnection(settings: ConnectionSettings): Promise<string> {
   const models = await discoverModels(settings);
   return models.length ? "Connected · " + models.length + " model(s) found" : "Connected · no models were listed";
+}
+
+export async function initializeAciIdentity(baseUrl: string, seedContext: string, apiKey = ""): Promise<unknown> {
+  const response = await request(endpoint(baseUrl, "/api/harness/initialize"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}) },
+    body: JSON.stringify({ seed_context: seedContext })
+  });
+  if (!response.ok) throw new Error("Identity bootstrap failed (" + response.status + "): " + (await response.text()).slice(0, 300));
+  const data = await response.json() as { profile?: unknown };
+  if (!data.profile) throw new Error("ACI server returned no identity profile.");
+  return data.profile;
 }
 
 export async function checkAciServer(baseUrl: string, apiKey = ""): Promise<string> {

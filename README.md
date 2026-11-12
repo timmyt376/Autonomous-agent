@@ -61,6 +61,10 @@ The mobile app uses native llama.cpp bindings and does not run in standard Expo 
 
 The desktop runtime defaults to a loopback-only bind. The current foundation does not provide unrestricted shell execution or arbitrary filesystem control. Keep services private unless authentication and transport security are configured. For mobile LAN access, set a strong `ACI_API_TOKEN` before binding to `0.0.0.0`. This is an early agent foundation, not a self-improving AGI; learning currently means storing and retrieving experiences and user-approved facts.
 
+## First-run identity harness
+
+See [docs/IDENTITY_HARNESS.md](docs/IDENTITY_HARNESS.md) for the shared desktop/mobile identity formation lifecycle, profile schema, and avatar-generation status.
+
 ## Development
 
 Desktop tests:

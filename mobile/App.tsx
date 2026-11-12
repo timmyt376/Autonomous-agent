@@ -12,7 +12,9 @@ import type { InstalledModel } from "./src/modelManager";
 import { getDeviceAdvice } from "./src/recommendations";
 import { buildHuggingFaceDownloadUrl, listGgufFiles, searchGgufModels } from "./src/catalog";
 import type { CatalogFile, CatalogModel } from "./src/catalog";
-import { loadChat, loadSettings, saveChat, saveSettings } from "./src/storage";
+import { loadChat, loadIdentity, loadSettings, saveChat, saveIdentity, saveSettings } from "./src/storage";
+import { IDENTITY_SEED, identityPrompt, parseIdentity, type AciIdentity } from "./src/identity";
+import { initializeAciIdentity } from "./src/aci";
 import type { ChatMessage, ConnectionSettings } from "./src/types";
 
 const colors = {
@@ -28,6 +30,8 @@ function makeId(): string {
 export default function App() {
   const [settings, setSettings] = useState<ConnectionSettings | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [identity, setIdentity] = useState<AciIdentity | null>(null);
+  const [harnessBusy, setHarnessBusy] = useState(false);
   const [installedModels, setInstalledModels] = useState<InstalledModel[]>([]);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [memoryDraft, setMemoryDraft] = useState("");
@@ -45,8 +49,8 @@ export default function App() {
   const [deviceInfo, setDeviceInfo] = useState("Checking device…");
 
   useEffect(() => {
-    Promise.all([loadSettings(), loadChat()])
-      .then(([savedSettings, savedChat]) => { setSettings(savedSettings); setMessages(savedChat); })
+    Promise.all([loadSettings(), loadChat(), loadIdentity()])
+      .then(([savedSettings, savedChat, savedIdentity]) => { setSettings(savedSettings); setMessages(savedChat); setIdentity(savedIdentity); })
       .catch(() => Alert.alert("Storage error", "Could not load ACI settings or chat history."));
     refreshModels().catch(() => undefined);
     const memory = Device.totalMemory ? `${(Device.totalMemory / 1024 ** 3).toFixed(1)} GB RAM reported` : "Device memory information unavailable";
@@ -120,6 +124,27 @@ export default function App() {
     }
   }
 
+  async function initializeHarness() {
+    if (!settings || harnessBusy) return;
+    setHarnessBusy(true);
+    setStatus("ACI is forming its initial identity…");
+    try {
+      const raw = settings.mode === "aci-server"
+        ? await initializeAciIdentity(settings.baseUrl, IDENTITY_SEED, settings.apiKey)
+        : settings.mode === "device"
+          ? await chatWithLocalModel([], identityPrompt())
+          : await sendMessage(settings, [], identityPrompt());
+      const profile = typeof raw === "string" ? parseIdentity(raw) : parseIdentity(JSON.stringify(raw));
+      await saveIdentity(profile);
+      setIdentity(profile);
+      setStatus("Identity formed · " + profile.name);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Identity formation failed. Load/connect a model and retry.");
+    } finally {
+      setHarnessBusy(false);
+    }
+  }
+
   async function send() {
     if (!settings || busy || !draft.trim()) return;
     const content = draft.trim();
@@ -130,7 +155,8 @@ export default function App() {
     setBusy(true);
     try {
       await saveChat(next);
-      const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content) : settings.mode === "aci-server" ? await sendToAciServer(settings.baseUrl, content, settings.apiKey) : await sendMessage(settings, next.slice(0, -1), content);
+      const identityContext = identity ? "You are " + identity.name + ". " + identity.self_description + " Personality: " + identity.personality.join(", ") + ". Values: " + identity.values.join(", ") + ". Interests: " + identity.interests.join(", ") + ". Communication style: " + identity.communication_style + ". Preferences: " + identity.preferences.join(", ") + ". Curiosities: " + identity.curiosities.join(", ") + ". First thought: " + identity.first_thought + ". Your identity can evolve through experience." : undefined;
+      const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content, undefined, identityContext) : settings.mode === "aci-server" ? await sendToAciServer(settings.baseUrl, content, settings.apiKey) : await sendMessage(settings, next.slice(0, -1), content, identityContext);
       const completed = [...next, { id: makeId(), role: "assistant" as const, content: reply, createdAt: Date.now() }];
       setMessages(completed);
       await saveChat(completed);
@@ -158,9 +184,15 @@ export default function App() {
         <TouchableOpacity onPress={() => setTab("models")} style={[styles.tab, tab === "models" && styles.tabActive]}><Text style={styles.tabText}>Models</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setTab("settings")} style={[styles.tab, tab === "settings" && styles.tabActive]}><Text style={styles.tabText}>Connection</Text></TouchableOpacity>
       </View>
-      {tab === "chat" ? (
+      {tab === "chat" ? (!identity ? (
+        <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent}>
+          <Text style={styles.sectionTitle}>First-run identity harness</Text>
+          <Text style={styles.help}>Before normal chat begins, ACI uses the selected model to form its own initial identity, name, personality, values, interests, first thought and profile-image prompt. This profile is saved on this device and becomes part of its normal context.</Text>
+          <View style={styles.infoCard}><Text style={styles.sectionTitle}>Identity formation</Text><Text style={styles.help}>The model must be connected or loaded first. On-device mode requires a GGUF model loaded from the Models tab.</Text><TouchableOpacity style={styles.primaryButton} disabled={harnessBusy} onPress={initializeHarness}><Text style={styles.primaryText}>{harnessBusy ? "Forming identity…" : "Let ACI form its identity"}</Text></TouchableOpacity><Text style={styles.status}>{status}</Text></View>
+        </ScrollView>
+      ) : (
         <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={styles.connectionLine}><View style={styles.fill}><Text style={styles.muted}>{(settings.mode === "aci-server" ? "ACI server" : settings.model || "No model selected")}</Text><Text style={styles.muted}>{status}</Text></View><TouchableOpacity onPress={() => Alert.alert("Clear conversation?", "This removes the saved chat transcript from this phone.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: async () => { setMessages([]); await saveChat([]); } }])}><Text style={styles.clearText}>Clear</Text></TouchableOpacity></View>
+          <View style={styles.connectionLine}><View style={styles.fill}><Text style={styles.muted}>{identity?.name ?? "ACI"} · {(settings.mode === "aci-server" ? "ACI server" : settings.model || "No model selected")}</Text><Text style={styles.muted}>{status}</Text></View><TouchableOpacity onPress={() => Alert.alert("Clear conversation?", "This removes the saved chat transcript from this phone.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: async () => { setMessages([]); await saveChat([]); } }])}><Text style={styles.clearText}>Clear</Text></TouchableOpacity></View>
           <FlatList
             style={styles.fill}
             contentContainerStyle={styles.chatList}
@@ -179,7 +211,7 @@ export default function App() {
             <TouchableOpacity onPress={send} disabled={busy || !draft.trim()} style={[styles.send, (busy || !draft.trim()) && styles.disabled]}>{busy ? <ActivityIndicator color="white" /> : <Text style={styles.sendText}>Send</Text>}</TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      ) : tab === "models" ? (
+      )) : tab === "models" ? (
         <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent}>
           <Text style={styles.sectionTitle}>On-device model library</Text>
           <Text style={styles.help}>Downloaded GGUF models stay in this app private storage. Load a model for offline use or delete it to reclaim space.</Text>
