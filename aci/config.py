@@ -16,6 +16,8 @@ def _read_keyring_secret() -> str:
 
 
 def store_openai_api_key(value: str) -> None:
+    if not value.strip():
+        return
     try:
         import keyring
         if value.strip():
