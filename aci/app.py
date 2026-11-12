@@ -310,6 +310,7 @@ async def model_catalog(q: str = Query(default="", max_length=80)):
 
 
 async def _run_model_pull(model: str):
+    global active_provider, active_model
     pull_state.update({
         "active": True, "model": model, "status": "Starting download",
         "completed": 0, "total": 0, "percent": 0, "error": None,
@@ -328,7 +329,10 @@ async def _run_model_pull(model: str):
 
     try:
         await ollama.pull(model, on_update)
-        pull_state.update({"active": False, "status": "Download complete", "percent": 100})
+        ollama.model = model
+        active_provider, active_model = "ollama", model
+        cognition.llm = ollama
+        pull_state.update({"active": False, "status": "Download complete · model selected", "percent": 100})
     except Exception as exc:
         pull_state.update({"active": False, "status": "Download failed", "error": str(exc)})
 
