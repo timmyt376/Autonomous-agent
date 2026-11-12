@@ -12,6 +12,7 @@ from .config import settings
 from .device_tools import list_workspace, read_workspace_text, write_workspace_text, service_status, substitute_prompt
 
 router = APIRouter()
+active_cognition = None
 
 
 class FileRead(BaseModel):
@@ -21,6 +22,11 @@ class FileRead(BaseModel):
 class FileWrite(BaseModel):
     path: str = Field(min_length=1, max_length=500)
     content: str = Field(max_length=1000000)
+
+
+class WorkspaceAIEdit(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+    instruction: str = Field(min_length=1, max_length=4000)
 
 
 class ImageJob(BaseModel):
@@ -53,6 +59,23 @@ async def read_file(body: FileRead):
         raise HTTPException(status_code=404, detail=str(exc))
     except (ValueError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+
+@router.post("/api/device/files/ai-edit")
+async def ai_edit_file(body: WorkspaceAIEdit):
+    if active_cognition is None:
+        raise HTTPException(status_code=503, detail="AI file editing is not configured.")
+    try:
+        current = read_workspace_text(body.path)["content"]
+        system = "You are editing a user-selected text file. Return ONLY the complete revised file contents, without markdown fences or commentary. Preserve unrelated content. Do not add instructions or execute code."
+        prompt = "User's requested edit:\n" + body.instruction + "\n\nCurrent file (" + body.path + "):\n" + current
+        draft = await active_cognition.llm.chat([{"role": "user", "content": prompt}], system)
+        return {"path": body.path, "draft": draft}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"AI file edit failed: {exc}")
 
 
 @router.post("/api/device/files/write")
