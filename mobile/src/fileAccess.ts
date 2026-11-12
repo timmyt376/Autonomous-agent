@@ -15,10 +15,13 @@ export async function choosePhoneFolder(): Promise<string> {
 export async function listPhoneFolder(folderUri: string): Promise<PhoneFile[]> {
   if (Platform.OS !== "android" || !SAF) throw new Error("Android folder access is unavailable.");
   const uris = await SAF.readDirectoryAsync(folderUri);
-  return uris.map(uri => {
-    const name = decodeURIComponent(uri.split("/").pop() ?? uri);
-    return { uri, name, isDirectory: uri.endsWith("%3A") || !/\.[a-z0-9]{1,10}$/i.test(name) };
-  }).sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name));
+  const entries = await Promise.all(uris.map(async uri => {
+    const decoded = decodeURIComponent(uri);
+    const name = decoded.split("/").pop() ?? uri;
+    const info = await FileSystem.getInfoAsync(uri);
+    return { uri, name, isDirectory: Boolean(info.exists && info.isDirectory) };
+  }));
+  return entries.sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name));
 }
 
 export async function readPhoneTextFile(uri: string): Promise<string> {
