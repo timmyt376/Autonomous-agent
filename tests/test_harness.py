@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import pytest
@@ -36,12 +37,11 @@ def sample_profile():
     }
 
 
-@pytest.mark.asyncio
-async def test_create_identity_persists_profile_and_initial_thought(tmp_path):
+def test_create_identity_persists_profile_and_initial_thought(tmp_path):
     memory = Memory(tmp_path / "identity.sqlite3")
     llm = FakeLLM(json.dumps(sample_profile()))
 
-    profile = await create_identity(llm, memory, "Foundational project context")
+    profile = asyncio.run(create_identity(llm, memory, "Foundational project context"))
 
     assert profile["name"] == "Aster"
     assert memory.get_state("identity_profile") == profile
@@ -50,14 +50,13 @@ async def test_create_identity_persists_profile_and_initial_thought(tmp_path):
     assert llm.calls == 1
 
 
-@pytest.mark.asyncio
-async def test_existing_identity_is_not_regenerated(tmp_path):
+def test_existing_identity_is_not_regenerated(tmp_path):
     memory = Memory(tmp_path / "identity.sqlite3")
     original = validate_profile(sample_profile())
     memory.set_state("identity_profile", original)
     llm = FakeLLM("{}")
 
-    result = await create_identity(llm, memory)
+    result = asyncio.run(create_identity(llm, memory))
 
     assert result == original
     assert llm.calls == 0
