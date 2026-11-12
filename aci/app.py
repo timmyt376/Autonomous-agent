@@ -39,6 +39,12 @@ saved_provider = memory.get_state("provider_selection") or {}
 active_provider = saved_provider.get("provider", settings.provider) if saved_provider.get("provider", settings.provider) in {"ollama", "deepseek", "openai"} else "ollama"
 active_model = saved_provider.get("model") or (settings.deepseek_model if active_provider == "deepseek" else settings.openai_model if active_provider == "openai" else settings.model)
 openai_client = OpenAICompatibleClient(settings.openai_base_url, settings.openai_model, settings.openai_api_key)
+if active_provider == "deepseek":
+    deepseek.model = active_model
+elif active_provider == "openai":
+    openai_client.model = active_model
+else:
+    ollama.model = active_model
 cognition = Cognition(deepseek if active_provider == "deepseek" else openai_client if active_provider == "openai" else ollama, memory, settings.max_context_messages)
 device_api.active_cognition = cognition
 
