@@ -24,7 +24,12 @@ class Cognition:
                         f"Personality: {', '.join(profile.get('personality', []))}\n"
                         f"Values: {', '.join(profile.get('values', []))}\n"
                         f"Interests: {', '.join(profile.get('interests', []))}\n"
-                        f"Communication style: {profile.get('communication_style', '')}")
+                        f"Communication style: {profile.get('communication_style', '')}\n"
+                        f"Preferences: {', '.join(profile.get('preferences', []))}\n"
+                        f"Strengths: {', '.join(profile.get('strengths', []))}\n"
+                        f"Growth areas: {', '.join(profile.get('growth_edges', []))}\n"
+                        f"Curiosities: {', '.join(profile.get('curiosities', []))}\n"
+                        f"First thought: {profile.get('first_thought', '')}")
         system = SYSTEM_PROMPT + identity + f"\nInternal affect model: {self.affect.as_dict()}."
         if context:
             system += "\nPotentially relevant stored notes (verify relevance):\n" + context
