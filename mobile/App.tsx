@@ -81,6 +81,70 @@ export default function App() {
     return "Send messages to an OpenAI-compatible model provider.";
   }, [settings?.mode]);
 
+
+  async function openPhoneFolder() {
+    try {
+      const uri = await choosePhoneFolder();
+      setFileFolderUri(uri);
+      setPhoneFiles(await listPhoneFolder(uri));
+      setEditingFileUri("");
+    } catch (error) { Alert.alert("Folder access", error instanceof Error ? error.message : "Could not open folder"); }
+  }
+
+  async function openPhoneEntry(file: PhoneFile) {
+    try {
+      if (file.isDirectory) {
+        setFileFolderUri(file.uri);
+        setPhoneFiles(await listPhoneFolder(file.uri));
+        setEditingFileUri("");
+      } else {
+        setEditingFileUri(file.uri);
+        setEditingFileName(file.name);
+        setEditingFileContent(await readPhoneTextFile(file.uri));
+      }
+    } catch (error) { Alert.alert("Could not open file", error instanceof Error ? error.message : "This may be a binary file."); }
+  }
+
+  async function savePhoneEntry() {
+    try { await writePhoneTextFile(editingFileUri, editingFileContent); Alert.alert("Saved", editingFileName + " was saved."); }
+    catch (error) { Alert.alert("Save failed", error instanceof Error ? error.message : "Could not save file."); }
+  }
+
+  async function createPhoneEntry() {
+    if (!fileFolderUri) return;
+    try {
+      const uri = await createPhoneTextFile(fileFolderUri, newFileName);
+      setEditingFileUri(uri); setEditingFileName(newFileName); setEditingFileContent("");
+      setPhoneFiles(await listPhoneFolder(fileFolderUri));
+    } catch (error) { Alert.alert("Create failed", error instanceof Error ? error.message : "Could not create file."); }
+  }
+
+  async function choosePhoto(camera: boolean) {
+    try {
+      if (camera) {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) throw new Error("Camera permission was not granted.");
+      }
+      const result = camera
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.9 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 0.9 });
+      if (!result.canceled && result.assets[0]) setSelectedPhotoUri(result.assets[0].uri);
+    } catch (error) { Alert.alert("Photo access", error instanceof Error ? error.message : "Could not open camera or gallery."); }
+  }
+
+  async function createGeneratedImage() {
+    if (!settings?.comfyUrl || !comfyWorkflow.trim() || !comfyPrompt.trim()) {
+      Alert.alert("Image setup needed", "Add a ComfyUI endpoint, paste an API-format workflow, and enter a prompt.");
+      return;
+    }
+    setToolsBusy(true); setStatus("Sending image workflow to ComfyUI…");
+    try {
+      const uri = await generateComfyImage(settings.comfyUrl, comfyWorkflow, comfyPrompt);
+      setGeneratedImageUri(uri); setStatus("Image generated and saved in ACI app storage.");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Image generation failed."); }
+    finally { setToolsBusy(false); }
+  }
+
   async function refreshModels() { setInstalledModels(await listInstalledModels()); }
 
   async function searchCatalog() {
