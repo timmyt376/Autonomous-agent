@@ -51,7 +51,8 @@ export async function isModelLoaded(): Promise<boolean> {
 
 export async function loadImageModel(modelDir: string, backend: LocalDreamBackend = "auto"): Promise<boolean> {
   if (!localImageGenAvailable()) throw new Error("On-device image generation is not available on this device.");
-  return await LocalDreamModule.loadModel({ modelPath: modelDir, backend });
+  const plainDir = modelDir.startsWith("file://") ? modelDir.slice(7) : modelDir;
+  return await LocalDreamModule.loadModel({ modelPath: plainDir, backend });
 }
 
 export async function unloadImageModel(): Promise<boolean> {

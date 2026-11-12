@@ -19,9 +19,10 @@ function plain(p: string): string {
   return p.startsWith("file://") ? p.slice(7) : p;
 }
 
-/** Plain (no `file://`) directory the model pack is extracted into. */
+/** Directory the model pack is extracted into (keeps the `file://` scheme so
+ *  expo-file-system's makeDirectoryAsync/getInfoAsync can write to it). */
 export function imageModelDir(modelId: string): string {
-  return `${plain(FileSystem.documentDirectory ?? "")}image-models/${modelId}`;
+  return `${FileSystem.documentDirectory}image-models/${modelId}`;
 }
 
 /** Download a model zip and extract it into the app's image-models directory. */
@@ -55,6 +56,6 @@ export async function downloadImageModel(
   }
 
   onProgress?.(1);
-  await unzip(plain(result.uri), dir);
+  await unzip(plain(result.uri), plain(dir));
   return dir;
 }
