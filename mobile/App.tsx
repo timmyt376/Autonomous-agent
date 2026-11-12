@@ -1,9 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, FlatList, Image, KeyboardAvoidingView, Platform,
   SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from "react-native";
 import * as Device from "expo-device";
+import * as ImagePicker from "expo-image-picker";
+import { SetupWizard } from "./src/SetupWizard";
+import { choosePhoneFolder, listPhoneFolder, readPhoneTextFile, writePhoneTextFile, createPhoneTextFile } from "./src/fileAccess";
+import type { PhoneFile } from "./src/fileAccess";
+import { generateComfyImage } from "./src/comfy";
 import { StatusBar } from "expo-status-bar";
 import { addAciGoal, checkAciServer, discoverModels, saveAciMemory, sendMessage, sendToAciServer } from "./src/aci";
 import { chatWithLocalModel, downloadAndLoadLocalModel, getActiveModelPath, isLocalModelLoaded, loadInstalledLocalModel, unloadLocalModel } from "./src/localModel";
@@ -12,7 +17,7 @@ import type { InstalledModel } from "./src/modelManager";
 import { getDeviceAdvice } from "./src/recommendations";
 import { buildHuggingFaceDownloadUrl, listGgufFiles, searchGgufModels } from "./src/catalog";
 import type { CatalogFile, CatalogModel } from "./src/catalog";
-import { loadChat, loadIdentity, loadSettings, saveChat, saveIdentity, saveSettings } from "./src/storage";
+import { loadChat, loadIdentity, loadSettings, loadSetupComplete, saveSetupComplete, saveChat, saveIdentity, saveSettings } from "./src/storage";
 import { IDENTITY_SEED, identityPrompt, parseIdentity, type AciIdentity } from "./src/identity";
 import { initializeAciIdentity } from "./src/aci";
 import type { ChatMessage, ConnectionSettings } from "./src/types";
@@ -29,6 +34,7 @@ function makeId(): string {
 
 export default function App() {
   const [settings, setSettings] = useState<ConnectionSettings | null>(null);
+  const [setupComplete, setSetupComplete] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [identity, setIdentity] = useState<AciIdentity | null>(null);
   const [harnessBusy, setHarnessBusy] = useState(false);
@@ -43,14 +49,25 @@ export default function App() {
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"chat" | "settings" | "models">("chat");
+  const [tab, setTab] = useState<"chat" | "settings" | "models" | "tools">("chat");
   const [status, setStatus] = useState("Not connected");
   const [models, setModels] = useState<string[]>([]);
   const [deviceInfo, setDeviceInfo] = useState("Checking device…");
+  const [fileFolderUri, setFileFolderUri] = useState("");
+  const [phoneFiles, setPhoneFiles] = useState<PhoneFile[]>([]);
+  const [editingFileUri, setEditingFileUri] = useState("");
+  const [editingFileName, setEditingFileName] = useState("");
+  const [editingFileContent, setEditingFileContent] = useState("");
+  const [newFileName, setNewFileName] = useState("notes.txt");
+  const [comfyPrompt, setComfyPrompt] = useState("");
+  const [comfyWorkflow, setComfyWorkflow] = useState("");
+  const [generatedImageUri, setGeneratedImageUri] = useState("");
+  const [selectedPhotoUri, setSelectedPhotoUri] = useState("");
+  const [toolsBusy, setToolsBusy] = useState(false);
 
   useEffect(() => {
-    Promise.all([loadSettings(), loadChat(), loadIdentity()])
-      .then(([savedSettings, savedChat, savedIdentity]) => { setSettings(savedSettings); setMessages(savedChat); setIdentity(savedIdentity); })
+    Promise.all([loadSettings(), loadChat(), loadIdentity(), loadSetupComplete()])
+      .then(([savedSettings, savedChat, savedIdentity, complete]) => { setSettings(savedSettings); setMessages(savedChat); setIdentity(savedIdentity); setSetupComplete(complete); })
       .catch(() => Alert.alert("Storage error", "Could not load ACI settings or chat history."));
     refreshModels().catch(() => undefined);
     const memory = Device.totalMemory ? `${(Device.totalMemory / 1024 ** 3).toFixed(1)} GB RAM reported` : "Device memory information unavailable";
@@ -171,6 +188,7 @@ export default function App() {
   }
 
   if (!settings) return <SafeAreaView style={styles.root}><ActivityIndicator color={colors.blue} /></SafeAreaView>;
+  if (!setupComplete) return <SafeAreaView style={styles.root}><StatusBar style="light" /><SetupWizard onComplete={async next => { await saveSettings(next); await saveSetupComplete(true); setSettings(next); setSetupComplete(true); setStatus("Setup saved · connect your model to continue"); }} /></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.root}>
