@@ -16,7 +16,16 @@ class Cognition:
         self.memory.add_message("user", text)
         memories = self.memory.search(text[:80], 4) if len(text) > 3 else []
         context = "\n".join(f"- {m['content']}" for m in memories)
-        system = SYSTEM_PROMPT + f"\nInternal affect model: {self.affect.as_dict()}."
+        profile = self.memory.get_state("identity_profile") or {}
+        identity = ""
+        if profile:
+            identity = (f"\nYour chosen name is {profile.get('name', 'ACI')}.\n"
+                        f"Your self-description: {profile.get('self_description', '')}\n"
+                        f"Personality: {', '.join(profile.get('personality', []))}\n"
+                        f"Values: {', '.join(profile.get('values', []))}\n"
+                        f"Interests: {', '.join(profile.get('interests', []))}\n"
+                        f"Communication style: {profile.get('communication_style', '')}")
+        system = SYSTEM_PROMPT + identity + f"\nInternal affect model: {self.affect.as_dict()}."
         if context:
             system += "\nPotentially relevant stored notes (verify relevance):\n" + context
         answer = await self.llm.chat(self.memory.recent_messages(self.max_context), system)
