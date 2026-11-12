@@ -22,6 +22,23 @@ class Memory:
             CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value TEXT NOT NULL);
             """)
 
+    def get_state(self, key: str):
+        import json
+        with self._connect() as db:
+            row = db.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
+        if not row:
+            return None
+        try:
+            return json.loads(row["value"])
+        except (TypeError, ValueError):
+            return None
+
+    def set_state(self, key: str, value):
+        import json
+        with self._connect() as db:
+            db.execute("INSERT INTO state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                       (key, json.dumps(value, ensure_ascii=False)))
+
     def add_message(self, role: str, content: str):
         with self._connect() as db:
             db.execute("INSERT INTO messages(role,content,created_at) VALUES(?,?,?)", (role, content, self._now()))
