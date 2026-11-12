@@ -17,6 +17,7 @@ export function SetupWizard({ onComplete }: { onComplete: (settings: ConnectionS
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const memory = Device.totalMemory ?? 0;
+  function openServer() { setBaseUrl("http://192.168.1.20:11434/v1"); setModel("qwen3:1.7b"); setApiKey(""); setStage("server"); }
   const deviceGb = memory / 1024 ** 3;
 
   async function finish(next: ConnectionSettings) {
@@ -65,7 +66,7 @@ export function SetupWizard({ onComplete }: { onComplete: (settings: ConnectionS
       <Text style={styles.heading}>Local model setup</Text>
       <Text style={styles.help}>Phone memory reported: {deviceGb ? deviceGb.toFixed(1) + " GB" : "unavailable"}. ACI starts with a small 0.6B parameter Q4 model and can add larger models later if hardware allows. Text and image models can run separately.</Text>
       {action("Auto-pick and install a model on this phone", autoPickPhoneModel)}
-      {action("Connect to a local model server", () => setStage("server"), true)}
+      {action("Connect to a local model server", openServer, true)}
       {field("ComfyUI image server (optional)", comfyUrl, setComfyUrl, "http://192.168.1.10:8188")}
       {action("Back", () => setStage("welcome"), true)}
     </> : null}
