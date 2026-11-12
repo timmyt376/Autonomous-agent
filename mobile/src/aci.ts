@@ -71,6 +71,18 @@ export async function checkConnection(settings: ConnectionSettings): Promise<str
   return models.length ? "Connected · " + models.length + " model(s) found" : "Connected · no models were listed";
 }
 
+export async function initializeAciIdentity(baseUrl: string, seedContext: string, apiKey = ""): Promise<unknown> {
+  const response = await request(endpoint(baseUrl, "/api/harness/initialize"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}) },
+    body: JSON.stringify({ seed_context: seedContext })
+  });
+  if (!response.ok) throw new Error("Identity bootstrap failed (" + response.status + "): " + (await response.text()).slice(0, 300));
+  const data = await response.json() as { profile?: unknown };
+  if (!data.profile) throw new Error("ACI server returned no identity profile.");
+  return data.profile;
+}
+
 export async function checkAciServer(baseUrl: string, apiKey = ""): Promise<string> {
   if (!baseUrl.trim()) throw new Error("Enter the ACI server address.");
   const response = await request(endpoint(baseUrl, "/api/status"), {
