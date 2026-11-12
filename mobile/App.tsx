@@ -12,7 +12,9 @@ import type { InstalledModel } from "./src/modelManager";
 import { getDeviceAdvice } from "./src/recommendations";
 import { buildHuggingFaceDownloadUrl, listGgufFiles, searchGgufModels } from "./src/catalog";
 import type { CatalogFile, CatalogModel } from "./src/catalog";
-import { loadChat, loadSettings, saveChat, saveSettings } from "./src/storage";
+import { loadChat, loadIdentity, loadSettings, saveChat, saveIdentity, saveSettings } from "./src/storage";
+import { IDENTITY_SEED, identityPrompt, parseIdentity, type AciIdentity } from "./src/identity";
+import { initializeAciIdentity } from "./src/aci";
 import type { ChatMessage, ConnectionSettings } from "./src/types";
 
 const colors = {
@@ -28,6 +30,8 @@ function makeId(): string {
 export default function App() {
   const [settings, setSettings] = useState<ConnectionSettings | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [identity, setIdentity] = useState<AciIdentity | null>(null);
+  const [harnessBusy, setHarnessBusy] = useState(false);
   const [installedModels, setInstalledModels] = useState<InstalledModel[]>([]);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [memoryDraft, setMemoryDraft] = useState("");
@@ -45,8 +49,8 @@ export default function App() {
   const [deviceInfo, setDeviceInfo] = useState("Checking device…");
 
   useEffect(() => {
-    Promise.all([loadSettings(), loadChat()])
-      .then(([savedSettings, savedChat]) => { setSettings(savedSettings); setMessages(savedChat); })
+    Promise.all([loadSettings(), loadChat(), loadIdentity()])
+      .then(([savedSettings, savedChat, savedIdentity]) => { setSettings(savedSettings); setMessages(savedChat); setIdentity(savedIdentity); })
       .catch(() => Alert.alert("Storage error", "Could not load ACI settings or chat history."));
     refreshModels().catch(() => undefined);
     const memory = Device.totalMemory ? `${(Device.totalMemory / 1024 ** 3).toFixed(1)} GB RAM reported` : "Device memory information unavailable";
@@ -120,6 +124,27 @@ export default function App() {
     }
   }
 
+  async function initializeHarness() {
+    if (!settings || harnessBusy) return;
+    setHarnessBusy(true);
+    setStatus("ACI is forming its initial identity…");
+    try {
+      const raw = settings.mode === "aci-server"
+        ? await initializeAciIdentity(settings.baseUrl, IDENTITY_SEED, settings.apiKey)
+        : settings.mode === "device"
+          ? await chatWithLocalModel([], identityPrompt())
+          : await sendMessage(settings, [], identityPrompt());
+      const profile = typeof raw === "string" ? parseIdentity(raw) : parseIdentity(JSON.stringify(raw));
+      await saveIdentity(profile);
+      setIdentity(profile);
+      setStatus("Identity formed · " + profile.name);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Identity formation failed. Load/connect a model and retry.");
+    } finally {
+      setHarnessBusy(false);
+    }
+  }
+
   async function send() {
     if (!settings || busy || !draft.trim()) return;
     const content = draft.trim();
@@ -130,7 +155,8 @@ export default function App() {
     setBusy(true);
     try {
       await saveChat(next);
-      const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content) : settings.mode === "aci-server" ? await sendToAciServer(settings.baseUrl, content, settings.apiKey) : await sendMessage(settings, next.slice(0, -1), content);
+      const identityContext = identity ? "You are " + identity.name + ". " + identity.self_description + " Personality: " + identity.personality.join(", ") + ". Values: " + identity.values.join(", ") + ". Interests: " + identity.interests.join(", ") + ". Communication style: " + identity.communication_style + ". Your identity can evolve through experience." : undefined;
+      const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content, undefined, identityContext) : settings.mode === "aci-server" ? await sendToAciServer(settings.baseUrl, content, settings.apiKey) : await sendMessage(settings, next.slice(0, -1), content, identityContext);
       const completed = [...next, { id: makeId(), role: "assistant" as const, content: reply, createdAt: Date.now() }];
       setMessages(completed);
       await saveChat(completed);
@@ -160,7 +186,7 @@ export default function App() {
       </View>
       {tab === "chat" ? (
         <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={styles.connectionLine}><View style={styles.fill}><Text style={styles.muted}>{(settings.mode === "aci-server" ? "ACI server" : settings.model || "No model selected")}</Text><Text style={styles.muted}>{status}</Text></View><TouchableOpacity onPress={() => Alert.alert("Clear conversation?", "This removes the saved chat transcript from this phone.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: async () => { setMessages([]); await saveChat([]); } }])}><Text style={styles.clearText}>Clear</Text></TouchableOpacity></View>
+          <View style={styles.connectionLine}><View style={styles.fill}><Text style={styles.muted}>{identity?.name ?? "ACI"} · {(settings.mode === "aci-server" ? "ACI server" : settings.model || "No model selected")}</Text><Text style={styles.muted}>{status}</Text></View><TouchableOpacity onPress={() => Alert.alert("Clear conversation?", "This removes the saved chat transcript from this phone.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: async () => { setMessages([]); await saveChat([]); } }])}><Text style={styles.clearText}>Clear</Text></TouchableOpacity></View>
           <FlatList
             style={styles.fill}
             contentContainerStyle={styles.chatList}
