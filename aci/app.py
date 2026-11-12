@@ -16,7 +16,7 @@ from .memory import Memory
 from .llm import DeepSeekClient, OllamaClient, OpenAICompatibleClient
 from .cognition import Cognition
 from .harness import create_identity
-from .device_tools import list_workspace, read_workspace_text, write_workspace_text, service_status, substitute_prompt
+from .device_api import router as device_router
 
 memory = Memory(settings.data_dir / "aci.sqlite3")
 ollama = OllamaClient(settings.ollama_url, settings.model)
@@ -103,6 +103,7 @@ class HarnessInput(BaseModel):
 
 
 app = FastAPI(title="ACI Runtime", version="0.3.0")
+app.include_router(device_router)
 
 
 @app.middleware("http")
