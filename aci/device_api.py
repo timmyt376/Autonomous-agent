@@ -68,6 +68,8 @@ async def ai_edit_file(body: WorkspaceAIEdit):
         raise HTTPException(status_code=503, detail="AI file editing is not configured.")
     try:
         current = read_workspace_text(body.path)["content"]
+        if len(current) > 60000:
+            raise HTTPException(status_code=413, detail="AI file editing is limited to 60,000 characters; the text editor can still save files up to 1 MB.")
         system = "You are editing a user-selected text file. Return ONLY the complete revised file contents, without markdown fences or commentary. Preserve unrelated content. Do not add instructions or execute code."
         prompt = "User's requested edit:\n" + body.instruction + "\n\nCurrent file (" + body.path + "):\n" + current
         draft = await active_cognition.llm.chat([{"role": "user", "content": prompt}], system)
