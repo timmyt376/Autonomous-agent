@@ -99,3 +99,38 @@ def substitute_prompt(value: Any, prompt: str, negative_prompt: str, width: int,
                 .replace("{{WIDTH}}", str(width))
                 .replace("{{HEIGHT}}", str(height)))
     return value
+
+def hardware_advice() -> dict[str, Any]:
+    import os
+    import platform
+    import subprocess
+    import shutil
+
+    total_ram_gb = 0.0
+    try:
+        import psutil
+        total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+    except Exception:
+        if hasattr(os, "sysconf"):
+            try:
+                total_ram_gb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024 ** 3)
+            except (ValueError, OSError):
+                pass
+    gpu_name = None
+    gpu_vram_gb = 0.0
+    nvidia_smi = shutil.which("nvidia-smi") if "shutil" in globals() else None
+    if nvidia_smi:
+        try:
+            result = subprocess.run([nvidia_smi, "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=4, check=True)
+            first = result.stdout.splitlines()[0].split(",")
+            gpu_name = first[0].strip()
+            gpu_vram_gb = float(first[1].strip()) / 1024
+        except Exception:
+            pass
+    if gpu_vram_gb >= 8 or total_ram_gb >= 16:
+        model = "qwen3:4b"
+    elif gpu_vram_gb >= 4 or total_ram_gb >= 8:
+        model = "qwen3:1.7b"
+    else:
+        model = "qwen3:0.6b"
+    return {"platform": platform.platform(), "ram_gb": round(total_ram_gb, 1), "gpu_name": gpu_name, "gpu_vram_gb": round(gpu_vram_gb, 1), "recommended_model": model}
