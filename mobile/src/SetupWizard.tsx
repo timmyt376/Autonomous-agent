@@ -36,7 +36,7 @@ export function SetupWizard({ onComplete }: { onComplete: (settings: ConnectionS
       if (!selected) throw new Error("The selected model repository contains no GGUF files.");
       const url = buildHuggingFaceDownloadUrl(repoId, selected.name);
       setStatus("Downloading " + selected.name + " · " + (selected.size ? (selected.size / 1024 ** 3).toFixed(2) + " GB" : "size unknown"));
-      const result = await downloadAndLoadLocalModel(url);
+      const result = await downloadAndLoadLocalModel(url, progress => setStatus("Downloading model · " + Math.round(progress * 100) + "%"));
       await finish({ mode: "device", baseUrl: "", model: selected.name, modelUrl: url, apiKey: "", comfyUrl });
       setStatus(result);
     } catch (error) { setStatus(error instanceof Error ? error.message : "Automatic model setup failed."); }
