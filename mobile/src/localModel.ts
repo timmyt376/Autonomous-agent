@@ -109,11 +109,12 @@ export async function unloadLocalModel(): Promise<void> {
 export async function chatWithLocalModel(
   history: ChatMessage[],
   message: string,
-  onToken?: (partial: string) => void
+  onToken?: (partial: string) => void,
+  systemPrompt?: string
 ): Promise<string> {
   if (!activeContext) throw new Error("No on-device model is loaded. Open Model library and load a GGUF model.");
   const messages = [
-    { role: "system" as const, content: "You are ACI, a helpful personal AI assistant. Be clear about uncertainty. Do not claim to be conscious or to have real feelings." },
+    { role: "system" as const, content: systemPrompt ?? "You are ACI, a helpful personal AI assistant. Be clear about uncertainty. Do not claim to be conscious or to have real feelings." },
     ...history.slice(-16).map(item => ({ role: item.role, content: item.content })),
     { role: "user" as const, content: message }
   ];
