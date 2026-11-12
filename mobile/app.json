@@ -48,6 +48,14 @@
           "forceCxx20": true,
           "enableOpenCL": true
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ACI uses selected photos only when you choose to attach or inspect them.",
+          "cameraPermission": "ACI uses the camera only when you choose to take a photo.",
+          "microphonePermission": false
+        }
       ]
     ]
   }
