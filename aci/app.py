@@ -21,6 +21,13 @@ from .device_api import router as device_router
 from .device_tools import hardware_advice
 
 memory = Memory(settings.data_dir / "aci.sqlite3")
+saved_custom_provider = memory.get_state("custom_provider_config") or {}
+if saved_custom_provider:
+    settings.openai_base_url = saved_custom_provider.get("base_url", settings.openai_base_url)
+    settings.openai_model = saved_custom_provider.get("model", settings.openai_model)
+saved_comfyui_url = memory.get_state("comfyui_url")
+if saved_comfyui_url:
+    settings.comfyui_url = saved_comfyui_url
 ollama = OllamaClient(settings.ollama_url, settings.model)
 deepseek = DeepSeekClient(
     settings.deepseek_base_url,
@@ -28,8 +35,9 @@ deepseek = DeepSeekClient(
     settings.deepseek_api_key,
 )
 
-active_provider = settings.provider if settings.provider in {"ollama", "deepseek", "openai"} else "ollama"
-active_model = settings.deepseek_model if active_provider == "deepseek" else settings.openai_model if active_provider == "openai" else settings.model
+saved_provider = memory.get_state("provider_selection") or {}
+active_provider = saved_provider.get("provider", settings.provider) if saved_provider.get("provider", settings.provider) in {"ollama", "deepseek", "openai"} else "ollama"
+active_model = saved_provider.get("model") or (settings.deepseek_model if active_provider == "deepseek" else settings.openai_model if active_provider == "openai" else settings.model)
 openai_client = OpenAICompatibleClient(settings.openai_base_url, settings.openai_model, settings.openai_api_key)
 cognition = Cognition(deepseek if active_provider == "deepseek" else openai_client if active_provider == "openai" else ollama, memory, settings.max_context_messages)
 device_api.active_cognition = cognition
@@ -70,6 +78,10 @@ class NoteInput(BaseModel):
 class ProviderInput(BaseModel):
     provider: Literal["ollama", "deepseek", "openai"]
     model: str | None = Field(default=None, max_length=120)
+
+
+class ComfySettingsInput(BaseModel):
+    base_url: str = Field(min_length=8, max_length=500)
 
 
 class DeepSeekSettingsInput(BaseModel):
@@ -251,6 +263,7 @@ async def select_provider(body: ProviderInput):
         active_model = model or settings.deepseek_model
         deepseek.model = active_model
         cognition.llm = deepseek
+        memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
     elif body.provider == "openai":
         if not openai_client.base_url or not openai_client.model:
             raise HTTPException(status_code=400, detail="Configure a custom OpenAI-compatible endpoint and model first.")
@@ -258,6 +271,7 @@ async def select_provider(body: ProviderInput):
         active_model = model or openai_client.model
         openai_client.model = active_model
         cognition.llm = openai_client
+        memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
     else:
         try:
             installed = await ollama.status()
@@ -274,6 +288,7 @@ async def select_provider(body: ProviderInput):
         active_model = selected
         ollama.model = selected
         cognition.llm = ollama
+        memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
 
     return {"provider": active_provider, "model": active_model, "message": f"Active provider: {active_provider} · {active_model}"}
 
@@ -362,6 +377,7 @@ async def _run_model_pull(model: str):
         ollama.model = model
         active_provider, active_model = "ollama", model
         cognition.llm = ollama
+        memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
         pull_state.update({"active": False, "status": "Download complete · model selected", "percent": 100})
     except Exception as exc:
         pull_state.update({"active": False, "status": "Download failed", "error": str(exc)})
@@ -402,6 +418,7 @@ async def select_local_model(body: ModelInput):
     ollama.model = model
     active_provider, active_model = "ollama", model
     cognition.llm = ollama
+    memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
     return {"selected": True, "provider": active_provider, "model": active_model, "message": f"Loaded model selection: {model}"}
 
 
