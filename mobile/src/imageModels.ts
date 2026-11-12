@@ -60,12 +60,24 @@ export async function downloadImageModel(
   return dir;
 }
 
-/** True if the model pack is already extracted on device (has its unet.mnn). */
-export async function isImageModelDownloaded(modelId: string): Promise<boolean> {
+async function findFile(dir: string, name: string, depth: number): Promise<boolean> {
+  if (depth > 3) return false;
   try {
-    const info = await FileSystem.getInfoAsync(`${imageModelDir(modelId)}/unet.mnn`);
-    return info.exists;
+    if ((await FileSystem.getInfoAsync(`${dir}/${name}`)).exists) return true;
+    const items = await FileSystem.readDirectoryAsync(dir);
+    for (const item of items) {
+      const sub = await FileSystem.getInfoAsync(`${dir}/${item}`);
+      if (sub.isDirectory && await findFile(`${dir}/${item}`, name, depth + 1)) return true;
+    }
   } catch {
-    return false;
+    /* dir may not exist yet */
   }
+  return false;
+}
+
+/** True if the model pack is already extracted on device — searches up to 3 levels
+ *  deep for unet.mnn, matching the native loader's own resolution (zips extract with
+ *  a top-level folder, so the file is one level deeper than the model dir). */
+export async function isImageModelDownloaded(modelId: string): Promise<boolean> {
+  return await findFile(imageModelDir(modelId), "unet.mnn", 0);
 }
