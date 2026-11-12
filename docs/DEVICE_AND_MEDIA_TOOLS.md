@@ -26,17 +26,18 @@ Android users can grant a folder through the system Storage Access Framework. Th
 
 iOS and Android sandbox rules remain in force. The app does not have unrestricted access to other apps' private data, does not bypass permission prompts, and does not provide covert screen capture or accessibility-based remote control.
 
-## ComfyUI image generation
+## ComfyUI image generation and model inspection
 
 Service detection checks Ollama's /api/tags and ComfyUI's /system_stats. Image generation uses ComfyUI's local HTTP API:
 
 - POST /prompt with the API-format workflow
 - GET /history/{prompt_id} to poll completion
 - GET /view to retrieve generated images
+- GET /object_info to discover installed checkpoints, LoRAs and workflow node inputs
 
-In a workflow JSON, use the literal placeholders {{PROMPT}} and {{NEGATIVE_PROMPT}} in the corresponding text input values. The workflow must be exported in ComfyUI's API format, and all checkpoints, LoRAs, custom nodes and other workflow dependencies must already be installed in ComfyUI. ACI does not guess or download multi-gigabyte diffusion weights automatically.
+ACI exposes GET /api/comfy/capabilities to report ComfyUI-reported GPU devices/VRAM, installed checkpoint and LoRA names, and a conservative hardware-tier recommendation. POST /api/comfy/inspect-workflow compares standard checkpoint/LoRA/VAE/UNET dependencies in an API-format workflow against the installed inventory. Missing dependencies can be detected before a generation job is submitted.
 
-PC ComfyUI installation is linked to the official desktop installer. The app detects an existing ComfyUI server but does not perform a blind cross-platform install of GPU-specific PyTorch/CUDA dependencies.
+This is an inventory and preflight manager, not yet an automatic weight downloader. It deliberately does not fetch arbitrary model URLs or install multi-gigabyte diffusion weights: source, license, file integrity, available disk space and workflow compatibility must be verified before downloads are automated. ComfyUI remains responsible for loading and running its installed models. ACI does not blindly install GPU-specific PyTorch/CUDA dependencies.
 
 ## Security notes
 
