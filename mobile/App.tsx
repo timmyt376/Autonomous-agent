@@ -372,7 +372,7 @@ export default function App() {
           <View style={styles.infoCard}><Text style={styles.sectionTitle}>Device access boundaries</Text><Text style={styles.help}>Android folder access uses the system document picker. iOS exposes app-private files and user-selected media, not unrestricted access to other apps' sandboxes. ACI does not silently operate other apps, bypass the lock screen, or take over the phone.</Text></View>
         </ScrollView>
       ) : (
-
+        <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.sectionTitle}>Model location</Text>
           <View style={styles.segment}>
             <TouchableOpacity onPress={() => updateSettings({ ...settings, mode: "device" })} style={[styles.segmentButton, settings.mode === "device" && styles.segmentSelected]}><Text style={styles.segmentText}>On device</Text></TouchableOpacity>
