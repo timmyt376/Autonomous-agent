@@ -477,6 +477,37 @@ async def initialize_harness(body: HarnessInput):
         raise HTTPException(status_code=503, detail=f"Identity bootstrap failed: {exc}")
 
 
+
+@app.post("/api/settings/custom-provider")
+async def save_custom_provider(body: CustomProviderInput):
+    base_url = body.base_url.strip().rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Endpoint must start with http:// or https://.")
+    try:
+        from .config import store_openai_api_key
+        store_openai_api_key(body.api_key)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    openai_client.base_url = base_url
+    openai_client.model = body.model.strip()
+    if body.api_key.strip():
+        openai_client.api_key = body.api_key.strip()
+    settings.openai_base_url = base_url
+    settings.openai_model = body.model.strip()
+    memory.set_state("custom_provider_config", {"base_url": base_url, "model": body.model.strip()})
+    return {"saved": True, "message": "Custom OpenAI-compatible endpoint saved."}
+
+
+@app.post("/api/settings/comfyui")
+async def save_comfyui_settings(body: ComfySettingsInput):
+    base_url = body.base_url.strip().rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="ComfyUI endpoint must start with http:// or https://.")
+    settings.comfyui_url = base_url
+    memory.set_state("comfyui_url", base_url)
+    return {"saved": True, "base_url": base_url}
+
+
 def main():
     uvicorn.run(app, host=settings.host, port=settings.port)
 
