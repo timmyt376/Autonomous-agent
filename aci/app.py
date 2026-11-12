@@ -170,6 +170,8 @@ async def status():
         "available_models": [m.get("name") or m.get("model") for m in local_models],
         "affect": cognition.affect.as_dict(),
         "goals": memory.goals(),
+        "identity_initialized": bool(memory.get_state("identity_profile")),
+        "identity_name": (memory.get_state("identity_profile") or {}).get("name"),
     }
 
 
