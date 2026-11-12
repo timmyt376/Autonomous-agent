@@ -8,8 +8,8 @@ const CHAT_KEY = "aci.mobile.chat.v1";
 
 const defaults: ConnectionSettings = {
   mode: "device",
-  baseUrl: "http://127.0.0.1:8080/v1",
-  model: "",
+  baseUrl: "https://api.deepseek.com",
+  model: "deepseek-flash",
   modelUrl: "",
   apiKey: ""
 };
