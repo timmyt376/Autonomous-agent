@@ -321,8 +321,35 @@ export default function App() {
             {downloadProgress !== null ? <Text style={styles.help}>Download: {(downloadProgress * 100).toFixed(0)}%</Text> : null}
           </View>
         </ScrollView>
-      ) : (
+
+      ) : tab === "tools" ? (
         <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.sectionTitle}>Phone file access</Text>
+          <Text style={styles.help}>Choose a folder using Android's system folder picker. ACI can browse that granted folder and edit UTF-8 text files you select. Access stays limited to the folder you grant.</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={openPhoneFolder}><Text style={styles.primaryText}>Choose phone folder</Text></TouchableOpacity>
+          {fileFolderUri ? <TouchableOpacity style={styles.smallButton} onPress={async () => setPhoneFiles(await listPhoneFolder(fileFolderUri))}><Text style={styles.primaryText}>Refresh folder</Text></TouchableOpacity> : null}
+          {phoneFiles.map(file => <TouchableOpacity key={file.uri} style={styles.modelRow} onPress={() => openPhoneEntry(file)}><Text style={styles.modelText}>{file.isDirectory ? "Folder · " : "File · "}{file.name}</Text><Text style={styles.muted}>{file.isDirectory ? "Open" : "Edit"}</Text></TouchableOpacity>)}
+          {fileFolderUri ? <View style={styles.infoCard}><Text style={styles.sectionTitle}>Create a text file</Text><TextInput value={newFileName} onChangeText={setNewFileName} style={styles.field} placeholder="notes.txt" placeholderTextColor={colors.muted}/><TouchableOpacity style={styles.smallButton} onPress={createPhoneEntry}><Text style={styles.primaryText}>Create file</Text></TouchableOpacity></View> : null}
+          {editingFileUri ? <View style={styles.infoCard}><Text style={styles.sectionTitle}>Editing · {editingFileName}</Text><TextInput value={editingFileContent} onChangeText={setEditingFileContent} multiline textAlignVertical="top" style={[styles.field, { minHeight: 220 }]}/><TouchableOpacity style={styles.primaryButton} onPress={savePhoneEntry}><Text style={styles.primaryText}>Save changes</Text></TouchableOpacity></View> : null}
+          <View style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Camera and photos</Text>
+            <Text style={styles.help}>Camera and gallery access are requested only when you tap a button. ACI does not continuously watch the phone.</Text>
+            <View style={styles.modelActions}><TouchableOpacity style={styles.smallButton} onPress={() => choosePhoto(true)}><Text style={styles.primaryText}>Take photo</Text></TouchableOpacity><TouchableOpacity style={styles.smallButton} onPress={() => choosePhoto(false)}><Text style={styles.primaryText}>Choose photo</Text></TouchableOpacity></View>
+            {selectedPhotoUri ? <Image source={{ uri: selectedPhotoUri }} style={{ width: "100%", height: 220, borderRadius: 10 }} resizeMode="contain"/> : null}
+          </View>
+          <View style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Image generation · ComfyUI</Text>
+            <Text style={styles.help}>Connect a ComfyUI server in Connection settings. Paste a workflow exported in ComfyUI's API format. Use the text markers PROMPT and NEGATIVE_PROMPT wrapped in double curly braces in the workflow's text nodes.</Text>
+            <TextInput value={comfyPrompt} onChangeText={setComfyPrompt} style={styles.field} placeholder="Describe the image" placeholderTextColor={colors.muted} multiline/>
+            <TextInput value={comfyWorkflow} onChangeText={setComfyWorkflow} style={[styles.field, { minHeight: 150 }]} placeholder="Paste ComfyUI API-format workflow JSON" placeholderTextColor={colors.muted} multiline autoCapitalize="none"/>
+            <TouchableOpacity style={styles.primaryButton} disabled={toolsBusy} onPress={createGeneratedImage}><Text style={styles.primaryText}>{toolsBusy ? "Generating…" : "Generate image"}</Text></TouchableOpacity>
+            {generatedImageUri ? <Image source={{ uri: generatedImageUri }} style={{ width: "100%", height: 260, borderRadius: 10 }} resizeMode="contain"/> : null}
+            <Text style={styles.status}>{status}</Text>
+          </View>
+          <View style={styles.infoCard}><Text style={styles.sectionTitle}>Device access boundaries</Text><Text style={styles.help}>Android folder access uses the system document picker. iOS exposes app-private files and user-selected media, not unrestricted access to other apps' sandboxes. ACI does not silently operate other apps, bypass the lock screen, or take over the phone.</Text></View>
+        </ScrollView>
+      ) : (
+
           <Text style={styles.sectionTitle}>Model location</Text>
           <View style={styles.segment}>
             <TouchableOpacity onPress={() => updateSettings({ ...settings, mode: "device" })} style={[styles.segmentButton, settings.mode === "device" && styles.segmentSelected]}><Text style={styles.segmentText}>On device</Text></TouchableOpacity>
