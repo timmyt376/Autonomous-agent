@@ -363,6 +363,7 @@ export default function App() {
             <Text style={styles.help}>Connect a ComfyUI server in Connection settings. Paste a workflow exported in ComfyUI's API format. Use the text markers PROMPT and NEGATIVE_PROMPT wrapped in double curly braces in the workflow's text nodes.</Text>
             <TextInput value={comfyPrompt} onChangeText={setComfyPrompt} style={styles.field} placeholder="Describe the image" placeholderTextColor={colors.muted} multiline/>
             <TextInput value={comfyWorkflow} onChangeText={setComfyWorkflow} style={[styles.field, { minHeight: 150 }]} placeholder="Paste ComfyUI API-format workflow JSON" placeholderTextColor={colors.muted} multiline autoCapitalize="none"/>
+            {identity?.avatar_prompt ? <TouchableOpacity style={styles.smallButton} onPress={() => setComfyPrompt(identity.avatar_prompt)}><Text style={styles.primaryText}>Use ACI profile-picture prompt</Text></TouchableOpacity> : null}
             <TouchableOpacity style={styles.primaryButton} disabled={toolsBusy} onPress={createGeneratedImage}><Text style={styles.primaryText}>{toolsBusy ? "Generating…" : "Generate image"}</Text></TouchableOpacity>
             {generatedImageUri ? <Image source={{ uri: generatedImageUri }} style={{ width: "100%", height: 260, borderRadius: 10 }} resizeMode="contain"/> : null}
             <Text style={styles.status}>{status}</Text>
