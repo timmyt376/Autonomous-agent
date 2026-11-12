@@ -155,7 +155,7 @@ export default function App() {
     setBusy(true);
     try {
       await saveChat(next);
-      const identityContext = identity ? "You are " + identity.name + ". " + identity.self_description + " Personality: " + identity.personality.join(", ") + ". Values: " + identity.values.join(", ") + ". Interests: " + identity.interests.join(", ") + ". Communication style: " + identity.communication_style + ". Your identity can evolve through experience." : undefined;
+      const identityContext = identity ? "You are " + identity.name + ". " + identity.self_description + " Personality: " + identity.personality.join(", ") + ". Values: " + identity.values.join(", ") + ". Interests: " + identity.interests.join(", ") + ". Communication style: " + identity.communication_style + ". Preferences: " + identity.preferences.join(", ") + ". Curiosities: " + identity.curiosities.join(", ") + ". First thought: " + identity.first_thought + ". Your identity can evolve through experience." : undefined;
       const reply = settings.mode === "device" ? await chatWithLocalModel(next.slice(0, -1), content, undefined, identityContext) : settings.mode === "aci-server" ? await sendToAciServer(settings.baseUrl, content, settings.apiKey) : await sendMessage(settings, next.slice(0, -1), content, identityContext);
       const completed = [...next, { id: makeId(), role: "assistant" as const, content: reply, createdAt: Date.now() }];
       setMessages(completed);
