@@ -197,7 +197,7 @@ async function pullModel(name){if(!name)return;try{await api('/api/models/pull',
 async function pollPull(){try{const d=await api('/api/models/pull');document.getElementById('pullStatus').textContent=d.status+(d.model?' · '+d.model:'')+(d.error?' · '+d.error:'');document.getElementById('pullBar').style.width=(d.percent||0)+'%';if(d.active){setTimeout(pollPull,1000)}else{refreshModels()}}catch(e){document.getElementById('pullStatus').textContent=e.message}}
 async function selectModel(name){try{const d=await api('/api/models/select','POST',{model:name});document.getElementById('providerStatus').textContent=d.message;refresh()}catch(e){document.getElementById('providerStatus').textContent=e.message}}
 async function deleteModel(name){if(!confirm('Delete '+name+'?'))return;try{await api('/api/models/delete','POST',{model:name});refreshModels()}catch(e){alert(e.message)}}
-document.getElementById('provider').addEventListener('change',()=>{document.getElementById('providerModel').value=document.getElementById('provider').value==='deepseek'?'deepseek-flash':'llama3.2:3b'});refresh();filterCatalog();
+document.getElementById('provider').addEventListener('change',()=>{document.getElementById('providerModel').value=document.getElementById('provider').value==='deepseek'?'deepseek-flash':document.getElementById('provider').value==='openai'?(document.getElementById('customModelId').value||'model-name'):'llama3.2:3b'});refresh();filterCatalog();detectServices();browseWorkspace();if(localStorage.getItem('aciSetupComplete')==='1')document.getElementById('setupOverlay').style.display='none';else showSetupStep('welcome');
 </script></body></html>"""
 
 
