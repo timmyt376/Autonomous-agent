@@ -9,6 +9,7 @@ import { SetupWizard } from "./src/SetupWizard";
 import { choosePhoneFolder, listPhoneFolder, readPhoneTextFile, writePhoneTextFile, createPhoneTextFile } from "./src/fileAccess";
 import type { PhoneFile } from "./src/fileAccess";
 import { generateComfyImage } from "./src/comfy";
+import { ImageGen } from "./src/ImageGen";
 import { StatusBar } from "expo-status-bar";
 import { addAciGoal, checkAciServer, discoverModels, saveAciMemory, sendMessage, sendToAciServer } from "./src/aci";
 import { chatWithLocalModel, downloadAndLoadLocalModel, getActiveModelPath, isLocalModelLoaded, loadInstalledLocalModel, unloadLocalModel } from "./src/localModel";
@@ -369,6 +370,7 @@ export default function App() {
             {generatedImageUri ? <Image source={{ uri: generatedImageUri }} style={{ width: "100%", height: 260, borderRadius: 10 }} resizeMode="contain"/> : null}
             <Text style={styles.status}>{status}</Text>
           </View>
+          <ImageGen />
           <View style={styles.infoCard}><Text style={styles.sectionTitle}>Device access boundaries</Text><Text style={styles.help}>Android folder access uses the system document picker. iOS exposes app-private files and user-selected media, not unrestricted access to other apps' sandboxes. ACI does not silently operate other apps, bypass the lock screen, or take over the phone.</Text></View>
         </ScrollView>
       ) : (
