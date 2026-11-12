@@ -107,3 +107,28 @@ class DeepSeekClient:
             {"name": "deepseek-flash"},
             {"name": "deepseek-v4-pro"},
         ]
+
+
+class OpenAICompatibleClient:
+    def __init__(self, base_url: str, model: str, api_key: str = ""):
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.api_key = api_key.strip()
+
+    async def chat(self, messages: list[dict], system: str = "") -> str:
+        if not self.base_url or not self.model:
+            raise RuntimeError("Configure a custom OpenAI-compatible endpoint and model.")
+        prompt_messages = ([{"role": "system", "content": system}] if system else []) + messages
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        async with httpx.AsyncClient(timeout=180) as client:
+            response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json={"model": self.model, "messages": prompt_messages, "stream": False})
+            if not response.is_success:
+                raise RuntimeError(f"Custom endpoint returned HTTP {response.status_code}: {response.text[:500]}")
+            data = response.json()
+        choices = data.get("choices") or []
+        content = (choices[0].get("message") or {}).get("content") if choices else None
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("Custom endpoint returned an empty response.")
+        return content.strip()
