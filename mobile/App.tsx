@@ -109,6 +109,7 @@ export default function App() {
 
   async function askAciToEditPhoneFile() {
     if (!settings || !editingFileUri || !fileEditInstruction.trim()) return;
+    if (editingFileContent.length > 60000) { Alert.alert("File too large for AI editing", "The phone editor can save files up to 1 MB, but AI editing is limited to 60,000 characters. Select a smaller file or edit this file manually."); return; }
     setToolsBusy(true);
     try {
       const system = "You are editing a user-selected text file. Return ONLY the complete revised file contents, without markdown fences or commentary. Preserve unrelated content. Do not execute code or claim the file has been saved.";
