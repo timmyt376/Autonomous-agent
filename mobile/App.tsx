@@ -264,6 +264,7 @@ export default function App() {
       <View style={styles.tabs}>
         <TouchableOpacity onPress={() => setTab("chat")} style={[styles.tab, tab === "chat" && styles.tabActive]}><Text style={styles.tabText}>Chat</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setTab("models")} style={[styles.tab, tab === "models" && styles.tabActive]}><Text style={styles.tabText}>Models</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setTab("tools")} style={[styles.tab, tab === "tools" && styles.tabActive]}><Text style={styles.tabText}>Device & Media</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setTab("settings")} style={[styles.tab, tab === "settings" && styles.tabActive]}><Text style={styles.tabText}>Connection</Text></TouchableOpacity>
       </View>
       {tab === "chat" ? (!identity ? (
