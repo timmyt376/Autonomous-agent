@@ -58,10 +58,11 @@ class OllamaClient:
 class DeepSeekClient:
     """OpenAI-compatible DeepSeek chat-completions client."""
 
-    def __init__(self, base_url: str, model: str, api_key: str = ""):
+    def __init__(self, base_url: str, model: str, api_key: str = "", transport=None):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key.strip()
+        self.transport = transport
 
     async def chat(self, messages: list[dict], system: str = "") -> str:
         if not self.api_key:
@@ -80,7 +81,7 @@ class DeepSeekClient:
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(timeout=180) as client:
+        async with httpx.AsyncClient(timeout=180, transport=self.transport) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
