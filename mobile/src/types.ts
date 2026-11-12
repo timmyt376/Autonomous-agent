@@ -6,6 +6,8 @@ export type ConnectionSettings = {
   model: string;
   modelUrl: string;
   apiKey: string;
+  comfyUrl?: string;
+  comfyWorkflow?: string;
 };
 
 export type ChatMessage = {
