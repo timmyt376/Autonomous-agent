@@ -13,7 +13,7 @@ import { getDeviceAdvice } from "./src/recommendations";
 import { buildHuggingFaceDownloadUrl, listGgufFiles, searchGgufModels } from "./src/catalog";
 import type { CatalogFile, CatalogModel } from "./src/catalog";
 import { loadChat, loadIdentity, loadSettings, saveChat, saveIdentity, saveSettings } from "./src/storage";
-import { identityPrompt, parseIdentity, type AciIdentity } from "./src/identity";
+import { IDENTITY_SEED, identityPrompt, parseIdentity, type AciIdentity } from "./src/identity";
 import { initializeAciIdentity } from "./src/aci";
 import type { ChatMessage, ConnectionSettings } from "./src/types";
 
@@ -211,7 +211,7 @@ export default function App() {
             <TouchableOpacity onPress={send} disabled={busy || !draft.trim()} style={[styles.send, (busy || !draft.trim()) && styles.disabled]}>{busy ? <ActivityIndicator color="white" /> : <Text style={styles.sendText}>Send</Text>}</TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      ) : tab === "models" ? (
+      )) : tab === "models" ? (
         <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent}>
           <Text style={styles.sectionTitle}>On-device model library</Text>
           <Text style={styles.help}>Downloaded GGUF models stay in this app private storage. Load a model for offline use or delete it to reclaim space.</Text>
