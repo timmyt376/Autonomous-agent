@@ -40,7 +40,8 @@ export async function discoverModels(settings: ConnectionSettings): Promise<Mode
 export async function sendMessage(
   settings: ConnectionSettings,
   history: ChatMessage[],
-  message: string
+  message: string,
+  systemPrompt?: string
 ): Promise<string> {
   if (!settings.baseUrl.trim()) throw new Error("Enter a model endpoint in Settings.");
   if (!settings.model.trim()) throw new Error("Choose a model in Settings.");
@@ -48,7 +49,7 @@ export async function sendMessage(
     throw new Error("Add your DeepSeek API key in Connection settings.");
   }
   const messages = [
-    { role: "system", content: "You are ACI, a helpful personal AI assistant. Be clear about uncertainty. Do not claim to be conscious or to have real feelings." },
+    { role: "system", content: systemPrompt ?? "You are ACI, a helpful personal AI assistant. Be clear about uncertainty. Do not claim to be conscious or to have real feelings." },
     ...history.slice(-20).map(item => ({ role: item.role, content: item.content })),
     { role: "user", content: message }
   ];
