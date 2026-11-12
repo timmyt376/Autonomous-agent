@@ -1,18 +1,19 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
 
 const SAF = FileSystem.StorageAccessFramework;
 
 export type PhoneFile = { uri: string; name: string; isDirectory: boolean };
 
 export async function choosePhoneFolder(): Promise<string> {
-  if (!SAF) throw new Error("Android folder access is unavailable on this platform.");
+  if (Platform.OS !== "android" || !SAF) throw new Error("Folder browsing is currently supported on Android. iOS file access is limited by its app sandbox and document picker.");
   const result = await SAF.requestDirectoryPermissionsAsync();
   if (!result.granted || !result.directoryUri) throw new Error("Folder permission was not granted.");
   return result.directoryUri;
 }
 
 export async function listPhoneFolder(folderUri: string): Promise<PhoneFile[]> {
-  if (!SAF) throw new Error("Folder access is unavailable.");
+  if (Platform.OS !== "android" || !SAF) throw new Error("Android folder access is unavailable.");
   const uris = await SAF.readDirectoryAsync(folderUri);
   return uris.map(uri => {
     const name = decodeURIComponent(uri.split("/").pop() ?? uri);
