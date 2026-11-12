@@ -51,6 +51,7 @@ def validate_profile(profile: dict[str, Any]) -> dict[str, Any]:
     for key in ("short_description", "communication_style", "first_thought",
                 "self_description", "avatar_prompt", "pronunciation"):
         profile[key] = str(profile.get(key, "")).strip()[:4000]
+    profile["avatar_status"] = "prompt_ready"
     profile["schema_version"] = 1
     profile["status"] = "formed"
     return profile
