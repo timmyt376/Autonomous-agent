@@ -13,8 +13,15 @@ export function imageModelUrl(repo: string, file: string): string {
   return `https://huggingface.co/${repo}/resolve/main/${file}`;
 }
 
+/** Strip a `file://` prefix — react-native-zip-archive and the native
+ *  LocalDreamModule both call `new File(path)` directly and reject `file://` URIs. */
+function plain(p: string): string {
+  return p.startsWith("file://") ? p.slice(7) : p;
+}
+
+/** Plain (no `file://`) directory the model pack is extracted into. */
 export function imageModelDir(modelId: string): string {
-  return `${FileSystem.documentDirectory}image-models/${modelId}`;
+  return `${plain(FileSystem.documentDirectory ?? "")}image-models/${modelId}`;
 }
 
 /** Download a model zip and extract it into the app's image-models directory. */
@@ -48,6 +55,6 @@ export async function downloadImageModel(
   }
 
   onProgress?.(1);
-  await unzip(result.uri, dir);
+  await unzip(plain(result.uri), dir);
   return dir;
 }
