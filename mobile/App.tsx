@@ -391,6 +391,9 @@ export default function App() {
               <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Test connection & find models</Text></TouchableOpacity>
             </>
           )}
+          <Text style={styles.label}>ComfyUI image-generation endpoint</Text>
+          <TextInput value={settings.comfyUrl ?? ""} onChangeText={value => updateSettings({ ...settings, comfyUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="http://192.168.1.20:8188" placeholderTextColor={colors.muted} />
+          <Text style={styles.help}>Image generation runs separately from text generation. Use the ComfyUI address on the computer or server hosting it.</Text>
           <Text style={styles.status}>{status}</Text>
           {models.map(model => <TouchableOpacity key={model} style={styles.modelRow} onPress={() => updateSettings({ ...settings, model })}><Text style={styles.modelText}>{model}</Text><Text style={styles.muted}>{settings.model === model ? "Selected ✓" : "Use model"}</Text></TouchableOpacity>)}
           <View style={styles.infoCard}><Text style={styles.sectionTitle}>Device information</Text><Text style={styles.help}>{deviceInfo}</Text><Text style={styles.help}>Suggested starting models: {getDeviceAdvice(Device.totalMemory ?? undefined).suggestedModels.join(" · ")}</Text><Text style={styles.help}>{getDeviceAdvice(Device.totalMemory ?? undefined).explanation}</Text></View>
