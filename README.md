@@ -65,6 +65,18 @@ The desktop runtime defaults to a loopback-only bind. The current foundation doe
 
 See [docs/IDENTITY_HARNESS.md](docs/IDENTITY_HARNESS.md) for the shared desktop/mobile identity formation lifecycle, profile schema, and avatar-generation status.
 
+## Unified setup, device tools and media generation
+
+On first launch, both the PC interface and mobile app ask whether to use an API or local models. PC local setup checks Ollama and hardware, can launch the Windows Ollama installer after an explicit click, and recommends a suitable model. Mobile local setup can automatically download and load a small Qwen3 0.6B Q4 GGUF on-device, or connect to an Ollama/local OpenAI-compatible server. Both support custom OpenAI-compatible endpoints. Text and image models are independent: text can run on-device or via Ollama/API, while image generation uses a separately configured ComfyUI server and an API-format workflow.
+
+The PC interface can browse and edit text files inside ACI_WORKSPACE only. AI-generated file edits are drafts and require the user to review and save. The Android app can browse a user-granted folder through Android Storage Access Framework, read/edit selected UTF-8 text files, and ask the active text model to prepare edits; saving remains a separate user action. Camera and photo access are invoked only after the user taps the relevant action.
+
+ACI does not have unrestricted control of Android/iOS, cannot bypass OS permission prompts, and does not silently inspect other apps or the entire phone. Android folder access is scoped to the folder granted by the user. On iOS, app sandbox and user-selected media restrictions apply.
+
+For ComfyUI, set ACI_COMFYUI_URL on the PC or enter the ComfyUI endpoint in mobile settings. Export a workflow using ComfyUI API format and replace the positive text node with the PROMPT placeholder and negative prompt node with the NEGATIVE_PROMPT placeholder. The workflow's model checkpoints must already exist in ComfyUI. ACI detects the service and submits/polls image jobs; it does not automatically install large diffusion checkpoints.
+
+See docs/DEVICE_AND_MEDIA_TOOLS.md.
+
 ## Development
 
 Desktop tests:

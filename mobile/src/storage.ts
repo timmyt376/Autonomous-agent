@@ -7,6 +7,7 @@ const SETTINGS_KEY = "aci.mobile.settings.v1";
 const API_KEY_KEY = "aci.mobile.api-key.v1";
 const CHAT_KEY = "aci.mobile.chat.v1";
 const IDENTITY_KEY = "aci.mobile.identity.v1";
+const SETUP_KEY = "aci.mobile.setup-complete.v1";
 
 const defaults: ConnectionSettings = {
   mode: "device",
@@ -57,4 +58,12 @@ export async function loadIdentity(): Promise<AciIdentity | null> {
 
 export async function saveIdentity(identity: AciIdentity): Promise<void> {
   await AsyncStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
+}
+
+export async function loadSetupComplete(): Promise<boolean> {
+  return (await AsyncStorage.getItem(SETUP_KEY)) === "true";
+}
+
+export async function saveSetupComplete(value: boolean): Promise<void> {
+  await AsyncStorage.setItem(SETUP_KEY, value ? "true" : "false");
 }

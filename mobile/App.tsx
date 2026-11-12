@@ -1,9 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, FlatList, Image, KeyboardAvoidingView, Platform,
   SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from "react-native";
 import * as Device from "expo-device";
+import * as ImagePicker from "expo-image-picker";
+import { SetupWizard } from "./src/SetupWizard";
+import { choosePhoneFolder, listPhoneFolder, readPhoneTextFile, writePhoneTextFile, createPhoneTextFile } from "./src/fileAccess";
+import type { PhoneFile } from "./src/fileAccess";
+import { generateComfyImage } from "./src/comfy";
 import { StatusBar } from "expo-status-bar";
 import { addAciGoal, checkAciServer, discoverModels, saveAciMemory, sendMessage, sendToAciServer } from "./src/aci";
 import { chatWithLocalModel, downloadAndLoadLocalModel, getActiveModelPath, isLocalModelLoaded, loadInstalledLocalModel, unloadLocalModel } from "./src/localModel";
@@ -12,7 +17,7 @@ import type { InstalledModel } from "./src/modelManager";
 import { getDeviceAdvice } from "./src/recommendations";
 import { buildHuggingFaceDownloadUrl, listGgufFiles, searchGgufModels } from "./src/catalog";
 import type { CatalogFile, CatalogModel } from "./src/catalog";
-import { loadChat, loadIdentity, loadSettings, saveChat, saveIdentity, saveSettings } from "./src/storage";
+import { loadChat, loadIdentity, loadSettings, loadSetupComplete, saveSetupComplete, saveChat, saveIdentity, saveSettings } from "./src/storage";
 import { IDENTITY_SEED, identityPrompt, parseIdentity, type AciIdentity } from "./src/identity";
 import { initializeAciIdentity } from "./src/aci";
 import type { ChatMessage, ConnectionSettings } from "./src/types";
@@ -29,6 +34,7 @@ function makeId(): string {
 
 export default function App() {
   const [settings, setSettings] = useState<ConnectionSettings | null>(null);
+  const [setupComplete, setSetupComplete] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [identity, setIdentity] = useState<AciIdentity | null>(null);
   const [harnessBusy, setHarnessBusy] = useState(false);
@@ -43,14 +49,26 @@ export default function App() {
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"chat" | "settings" | "models">("chat");
+  const [tab, setTab] = useState<"chat" | "settings" | "models" | "tools">("chat");
   const [status, setStatus] = useState("Not connected");
   const [models, setModels] = useState<string[]>([]);
   const [deviceInfo, setDeviceInfo] = useState("Checking device…");
+  const [fileFolderUri, setFileFolderUri] = useState("");
+  const [phoneFiles, setPhoneFiles] = useState<PhoneFile[]>([]);
+  const [editingFileUri, setEditingFileUri] = useState("");
+  const [editingFileName, setEditingFileName] = useState("");
+  const [editingFileContent, setEditingFileContent] = useState("");
+  const [fileEditInstruction, setFileEditInstruction] = useState("");
+  const [newFileName, setNewFileName] = useState("notes.txt");
+  const [comfyPrompt, setComfyPrompt] = useState("");
+  const [comfyWorkflow, setComfyWorkflow] = useState("");
+  const [generatedImageUri, setGeneratedImageUri] = useState("");
+  const [selectedPhotoUri, setSelectedPhotoUri] = useState("");
+  const [toolsBusy, setToolsBusy] = useState(false);
 
   useEffect(() => {
-    Promise.all([loadSettings(), loadChat(), loadIdentity()])
-      .then(([savedSettings, savedChat, savedIdentity]) => { setSettings(savedSettings); setMessages(savedChat); setIdentity(savedIdentity); })
+    Promise.all([loadSettings(), loadChat(), loadIdentity(), loadSetupComplete()])
+      .then(([savedSettings, savedChat, savedIdentity, complete]) => { setSettings(savedSettings); setMessages(savedChat); setIdentity(savedIdentity); setSetupComplete(complete); })
       .catch(() => Alert.alert("Storage error", "Could not load ACI settings or chat history."));
     refreshModels().catch(() => undefined);
     const memory = Device.totalMemory ? `${(Device.totalMemory / 1024 ** 3).toFixed(1)} GB RAM reported` : "Device memory information unavailable";
@@ -63,6 +81,91 @@ export default function App() {
     if (settings?.mode === "aci-server") return "Send messages to your own ACI Python server.";
     return "Send messages to an OpenAI-compatible model provider.";
   }, [settings?.mode]);
+
+
+  async function openPhoneFolder() {
+    try {
+      const uri = await choosePhoneFolder();
+      setFileFolderUri(uri);
+      setPhoneFiles(await listPhoneFolder(uri));
+      setEditingFileUri("");
+    } catch (error) { Alert.alert("Folder access", error instanceof Error ? error.message : "Could not open folder"); }
+  }
+
+  async function openPhoneEntry(file: PhoneFile) {
+    try {
+      if (file.isDirectory) {
+        setFileFolderUri(file.uri);
+        setPhoneFiles(await listPhoneFolder(file.uri));
+        setEditingFileUri("");
+      } else {
+        setEditingFileUri(file.uri);
+        setEditingFileName(file.name);
+        setEditingFileContent(await readPhoneTextFile(file.uri));
+      }
+    } catch (error) { Alert.alert("Could not open file", error instanceof Error ? error.message : "This may be a binary file."); }
+  }
+
+
+  async function askAciToEditPhoneFile() {
+    if (!settings || !editingFileUri || !fileEditInstruction.trim()) return;
+    if (editingFileContent.length > 60000) { Alert.alert("File too large for AI editing", "The phone editor can save files up to 1 MB, but AI editing is limited to 60,000 characters. Select a smaller file or edit this file manually."); return; }
+    setToolsBusy(true);
+    try {
+      const system = "You are editing a user-selected text file. Return ONLY the complete revised file contents, without markdown fences or commentary. Preserve unrelated content. Do not execute code or claim the file has been saved.";
+      const prompt = "Edit this file according to the user's instruction.\nInstruction: " + fileEditInstruction + "\n\nFile name: " + editingFileName + "\nCurrent contents:\n" + editingFileContent;
+      const raw = settings.mode === "device"
+        ? await chatWithLocalModel([], prompt, undefined, system)
+        : settings.mode === "aci-server"
+          ? await sendToAciServer(settings.baseUrl, system + "\n\n" + prompt, settings.apiKey)
+          : await sendMessage(settings, [], prompt, system);
+      const revised = raw.trim().replace(/^\x60{3}(?:[a-z]+)?\s*/i, "").replace(/\s*\x60{3}$/, "");
+      setEditingFileContent(revised);
+      setFileEditInstruction("");
+      Alert.alert("Draft ready", "ACI prepared an edited version. Review it in the editor, then tap Save changes to write it to your phone.");
+    } catch (error) { Alert.alert("AI edit failed", error instanceof Error ? error.message : "Could not edit this file."); }
+    finally { setToolsBusy(false); }
+  }
+
+  async function savePhoneEntry() {
+    try { await writePhoneTextFile(editingFileUri, editingFileContent); Alert.alert("Saved", editingFileName + " was saved."); }
+    catch (error) { Alert.alert("Save failed", error instanceof Error ? error.message : "Could not save file."); }
+  }
+
+  async function createPhoneEntry() {
+    if (!fileFolderUri) return;
+    try {
+      const uri = await createPhoneTextFile(fileFolderUri, newFileName);
+      setEditingFileUri(uri); setEditingFileName(newFileName); setEditingFileContent("");
+      setPhoneFiles(await listPhoneFolder(fileFolderUri));
+    } catch (error) { Alert.alert("Create failed", error instanceof Error ? error.message : "Could not create file."); }
+  }
+
+  async function choosePhoto(camera: boolean) {
+    try {
+      if (camera) {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) throw new Error("Camera permission was not granted.");
+      }
+      const result = camera
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.9 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 0.9 });
+      if (!result.canceled && result.assets[0]) setSelectedPhotoUri(result.assets[0].uri);
+    } catch (error) { Alert.alert("Photo access", error instanceof Error ? error.message : "Could not open camera or gallery."); }
+  }
+
+  async function createGeneratedImage() {
+    if (!settings?.comfyUrl || !comfyWorkflow.trim() || !comfyPrompt.trim()) {
+      Alert.alert("Image setup needed", "Add a ComfyUI endpoint, paste an API-format workflow, and enter a prompt.");
+      return;
+    }
+    setToolsBusy(true); setStatus("Sending image workflow to ComfyUI…");
+    try {
+      const uri = await generateComfyImage(settings.comfyUrl, comfyWorkflow, comfyPrompt);
+      setGeneratedImageUri(uri); setStatus("Image generated and saved in ACI app storage.");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Image generation failed."); }
+    finally { setToolsBusy(false); }
+  }
 
   async function refreshModels() { setInstalledModels(await listInstalledModels()); }
 
@@ -171,6 +274,7 @@ export default function App() {
   }
 
   if (!settings) return <SafeAreaView style={styles.root}><ActivityIndicator color={colors.blue} /></SafeAreaView>;
+  if (!setupComplete) return <SafeAreaView style={styles.root}><StatusBar style="light" /><SetupWizard onComplete={async next => { await saveSettings(next); await saveSetupComplete(true); setSettings(next); setSetupComplete(true); setStatus("Setup saved · connect your model to continue"); }} /></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -182,6 +286,7 @@ export default function App() {
       <View style={styles.tabs}>
         <TouchableOpacity onPress={() => setTab("chat")} style={[styles.tab, tab === "chat" && styles.tabActive]}><Text style={styles.tabText}>Chat</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setTab("models")} style={[styles.tab, tab === "models" && styles.tabActive]}><Text style={styles.tabText}>Models</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setTab("tools")} style={[styles.tab, tab === "tools" && styles.tabActive]}><Text style={styles.tabText}>Device & Media</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setTab("settings")} style={[styles.tab, tab === "settings" && styles.tabActive]}><Text style={styles.tabText}>Connection</Text></TouchableOpacity>
       </View>
       {tab === "chat" ? (!identity ? (
@@ -238,6 +343,34 @@ export default function App() {
             {downloadProgress !== null ? <Text style={styles.help}>Download: {(downloadProgress * 100).toFixed(0)}%</Text> : null}
           </View>
         </ScrollView>
+
+      ) : tab === "tools" ? (
+        <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.sectionTitle}>Phone file access</Text>
+          <Text style={styles.help}>Choose a folder using Android's system folder picker. ACI can browse that granted folder and edit UTF-8 text files you select. Access stays limited to the folder you grant.</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={openPhoneFolder}><Text style={styles.primaryText}>Choose phone folder</Text></TouchableOpacity>
+          {fileFolderUri ? <TouchableOpacity style={styles.smallButton} onPress={async () => setPhoneFiles(await listPhoneFolder(fileFolderUri))}><Text style={styles.primaryText}>Refresh folder</Text></TouchableOpacity> : null}
+          {phoneFiles.map(file => <TouchableOpacity key={file.uri} style={styles.modelRow} onPress={() => openPhoneEntry(file)}><Text style={styles.modelText}>{file.isDirectory ? "Folder · " : "File · "}{file.name}</Text><Text style={styles.muted}>{file.isDirectory ? "Open" : "Edit"}</Text></TouchableOpacity>)}
+          {fileFolderUri ? <View style={styles.infoCard}><Text style={styles.sectionTitle}>Create a text file</Text><TextInput value={newFileName} onChangeText={setNewFileName} style={styles.field} placeholder="notes.txt" placeholderTextColor={colors.muted}/><TouchableOpacity style={styles.smallButton} onPress={createPhoneEntry}><Text style={styles.primaryText}>Create file</Text></TouchableOpacity></View> : null}
+          {editingFileUri ? <View style={styles.infoCard}><Text style={styles.sectionTitle}>Editing · {editingFileName}</Text><TextInput value={fileEditInstruction} onChangeText={setFileEditInstruction} style={styles.field} placeholder="Tell ACI how to change this file" placeholderTextColor={colors.muted}/><TouchableOpacity style={styles.smallButton} disabled={toolsBusy} onPress={askAciToEditPhoneFile}><Text style={styles.primaryText}>{toolsBusy ? "Working…" : "Ask ACI to edit this file"}</Text></TouchableOpacity><Text style={styles.help}>Review ACI’s draft below. It will not be saved until you press Save changes.</Text><TextInput value={editingFileContent} onChangeText={setEditingFileContent} multiline textAlignVertical="top" style={[styles.field, { minHeight: 220 }]}/><TouchableOpacity style={styles.primaryButton} onPress={savePhoneEntry}><Text style={styles.primaryText}>Save changes</Text></TouchableOpacity></View> : null}
+          <View style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Camera and photos</Text>
+            <Text style={styles.help}>Camera and gallery access are requested only when you tap a button. ACI does not continuously watch the phone.</Text>
+            <View style={styles.modelActions}><TouchableOpacity style={styles.smallButton} onPress={() => choosePhoto(true)}><Text style={styles.primaryText}>Take photo</Text></TouchableOpacity><TouchableOpacity style={styles.smallButton} onPress={() => choosePhoto(false)}><Text style={styles.primaryText}>Choose photo</Text></TouchableOpacity></View>
+            {selectedPhotoUri ? <Image source={{ uri: selectedPhotoUri }} style={{ width: "100%", height: 220, borderRadius: 10 }} resizeMode="contain"/> : null}
+          </View>
+          <View style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Image generation · ComfyUI</Text>
+            <Text style={styles.help}>Connect a ComfyUI server in Connection settings. Paste a workflow exported in ComfyUI's API format. Use the text markers PROMPT and NEGATIVE_PROMPT wrapped in double curly braces in the workflow's text nodes.</Text>
+            <TextInput value={comfyPrompt} onChangeText={setComfyPrompt} style={styles.field} placeholder="Describe the image" placeholderTextColor={colors.muted} multiline/>
+            <TextInput value={comfyWorkflow} onChangeText={setComfyWorkflow} style={[styles.field, { minHeight: 150 }]} placeholder="Paste ComfyUI API-format workflow JSON" placeholderTextColor={colors.muted} multiline autoCapitalize="none"/>
+            {identity?.avatar_prompt ? <TouchableOpacity style={styles.smallButton} onPress={() => setComfyPrompt(identity.avatar_prompt)}><Text style={styles.primaryText}>Use ACI profile-picture prompt</Text></TouchableOpacity> : null}
+            <TouchableOpacity style={styles.primaryButton} disabled={toolsBusy} onPress={createGeneratedImage}><Text style={styles.primaryText}>{toolsBusy ? "Generating…" : "Generate image"}</Text></TouchableOpacity>
+            {generatedImageUri ? <Image source={{ uri: generatedImageUri }} style={{ width: "100%", height: 260, borderRadius: 10 }} resizeMode="contain"/> : null}
+            <Text style={styles.status}>{status}</Text>
+          </View>
+          <View style={styles.infoCard}><Text style={styles.sectionTitle}>Device access boundaries</Text><Text style={styles.help}>Android folder access uses the system document picker. iOS exposes app-private files and user-selected media, not unrestricted access to other apps' sandboxes. ACI does not silently operate other apps, bypass the lock screen, or take over the phone.</Text></View>
+        </ScrollView>
       ) : (
         <ScrollView style={styles.fill} contentContainerStyle={styles.settingsContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.sectionTitle}>Model location</Text>
@@ -281,6 +414,9 @@ export default function App() {
               <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Test connection & find models</Text></TouchableOpacity>
             </>
           )}
+          <Text style={styles.label}>ComfyUI image-generation endpoint</Text>
+          <TextInput value={settings.comfyUrl ?? ""} onChangeText={value => updateSettings({ ...settings, comfyUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="http://192.168.1.20:8188" placeholderTextColor={colors.muted} />
+          <Text style={styles.help}>Image generation runs separately from text generation. Use the ComfyUI address on the computer or server hosting it.</Text>
           <Text style={styles.status}>{status}</Text>
           {models.map(model => <TouchableOpacity key={model} style={styles.modelRow} onPress={() => updateSettings({ ...settings, model })}><Text style={styles.modelText}>{model}</Text><Text style={styles.muted}>{settings.model === model ? "Selected ✓" : "Use model"}</Text></TouchableOpacity>)}
           <View style={styles.infoCard}><Text style={styles.sectionTitle}>Device information</Text><Text style={styles.help}>{deviceInfo}</Text><Text style={styles.help}>Suggested starting models: {getDeviceAdvice(Device.totalMemory ?? undefined).suggestedModels.join(" · ")}</Text><Text style={styles.help}>{getDeviceAdvice(Device.totalMemory ?? undefined).explanation}</Text></View>

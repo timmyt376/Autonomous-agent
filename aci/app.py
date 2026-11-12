@@ -1,6 +1,9 @@
 import asyncio
 import hmac
 import re
+import shutil
+import subprocess
+import sys
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
@@ -10,11 +13,21 @@ import uvicorn
 
 from .config import settings, store_deepseek_api_key
 from .memory import Memory
-from .llm import DeepSeekClient, OllamaClient
+from .llm import DeepSeekClient, OllamaClient, OpenAICompatibleClient
 from .cognition import Cognition
 from .harness import create_identity
+from . import device_api
+from .device_api import router as device_router
+from .device_tools import hardware_advice
 
 memory = Memory(settings.data_dir / "aci.sqlite3")
+saved_custom_provider = memory.get_state("custom_provider_config") or {}
+if saved_custom_provider:
+    settings.openai_base_url = saved_custom_provider.get("base_url", settings.openai_base_url)
+    settings.openai_model = saved_custom_provider.get("model", settings.openai_model)
+saved_comfyui_url = memory.get_state("comfyui_url")
+if saved_comfyui_url:
+    settings.comfyui_url = saved_comfyui_url
 ollama = OllamaClient(settings.ollama_url, settings.model)
 deepseek = DeepSeekClient(
     settings.deepseek_base_url,
@@ -22,9 +35,18 @@ deepseek = DeepSeekClient(
     settings.deepseek_api_key,
 )
 
-active_provider = settings.provider if settings.provider in {"ollama", "deepseek"} else "ollama"
-active_model = settings.deepseek_model if active_provider == "deepseek" else settings.model
-cognition = Cognition(deepseek if active_provider == "deepseek" else ollama, memory, settings.max_context_messages)
+saved_provider = memory.get_state("provider_selection") or {}
+active_provider = saved_provider.get("provider", settings.provider) if saved_provider.get("provider", settings.provider) in {"ollama", "deepseek", "openai"} else "ollama"
+active_model = saved_provider.get("model") or (settings.deepseek_model if active_provider == "deepseek" else settings.openai_model if active_provider == "openai" else settings.model)
+openai_client = OpenAICompatibleClient(settings.openai_base_url, settings.openai_model, settings.openai_api_key)
+if active_provider == "deepseek":
+    deepseek.model = active_model
+elif active_provider == "openai":
+    openai_client.model = active_model
+else:
+    ollama.model = active_model
+cognition = Cognition(deepseek if active_provider == "deepseek" else openai_client if active_provider == "openai" else ollama, memory, settings.max_context_messages)
+device_api.active_cognition = cognition
 
 pull_state = {
     "active": False,
@@ -60,8 +82,12 @@ class NoteInput(BaseModel):
 
 
 class ProviderInput(BaseModel):
-    provider: Literal["ollama", "deepseek"]
+    provider: Literal["ollama", "deepseek", "openai"]
     model: str | None = Field(default=None, max_length=120)
+
+
+class ComfySettingsInput(BaseModel):
+    base_url: str = Field(min_length=8, max_length=500)
 
 
 class DeepSeekSettingsInput(BaseModel):
@@ -73,11 +99,32 @@ class ModelInput(BaseModel):
     model: str = Field(min_length=1, max_length=120)
 
 
+class CustomProviderInput(BaseModel):
+    base_url: str = Field(min_length=8, max_length=500)
+    model: str = Field(min_length=1, max_length=160)
+    api_key: str = Field(default="", max_length=1000)
+
+class WorkspaceReadInput(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+
+class WorkspaceWriteInput(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+    content: str = Field(max_length=1000000)
+
+class ComfyImageInput(BaseModel):
+    base_url: str = Field(default="http://127.0.0.1:8188", max_length=500)
+    workflow: dict
+    prompt: str = Field(min_length=1, max_length=6000)
+    negative_prompt: str = Field(default="", max_length=3000)
+    width: int = Field(default=768, ge=256, le=2048)
+    height: int = Field(default=768, ge=256, le=2048)
+
 class HarnessInput(BaseModel):
     seed_context: str = Field(default="", max_length=12000)
 
 
 app = FastAPI(title="ACI Runtime", version="0.3.0")
+app.include_router(device_router)
 
 
 @app.middleware("http")
@@ -104,23 +151,28 @@ input,select,textarea{width:100%;background:#0b0f1a;color:#eef3ff;border:1px sol
 button{background:#4a7dff;color:white;border:0;border-radius:8px;padding:10px 14px;margin:4px 5px 4px 0;cursor:pointer;font-weight:650}
 button.secondary{background:#263650}button.danger{background:#8d3944}
 pre{white-space:pre-wrap;overflow-wrap:anywhere}.item{padding:12px;background:#182338;border-radius:9px;margin:8px 0;display:flex;justify-content:space-between;gap:10px;align-items:center}
-.item small{display:block;color:#9aa9c2;margin-top:3px}.bar{height:8px;background:#263650;border-radius:8px;overflow:hidden;margin:10px 0}.bar>div{height:100%;background:#4a7dff;width:0}
+.item small{display:block;color:#9aa9c2;margin-top:3px}.bar{height:8px;background:#263650;border-radius:8px;overflow:hidden;margin:10px 0}.bar>div{height:100%;background:#4a7dff;width:0}.overlay{position:fixed;inset:0;background:#050914ee;z-index:20;display:flex;align-items:center;justify-content:center;padding:18px}.setupPanel{width:min(620px,100%);max-height:90vh;overflow:auto;background:#121a29;border:1px solid #405071;border-radius:18px;padding:22px}.setupPanel h2{color:#eef3ff}.setupPanel p{color:#9aa9c2;line-height:1.55}.setupPanel .choice{display:block;width:100%;text-align:left;padding:16px;margin:8px 0}
 </style></head><body>
+<div id="setupOverlay" class="overlay"><div class="setupPanel">
+<div id="setupWelcome"><h2>Welcome to ACI</h2><p>Choose how this computer should run text models. You can change providers later.</p><button class="choice" onclick="showSetupStep('local')">Use local models on this computer</button><button class="choice" onclick="showSetupStep('api')">Use an API / hosted model</button></div>
+<div id="setupLocal" style="display:none"><h2>Local model setup</h2><p>ACI checks system RAM and NVIDIA VRAM, then recommends a small local model. It can launch the Ollama installer on Windows after you click.</p><pre id="setupStatus" class="muted">Checking local services…</pre><button onclick="installOllama()">Install / start Ollama</button><button onclick="finishDesktopSetup('ollama')">Auto-pick, download and select local model</button><button class="secondary" onclick="showSetupStep('welcome')">Back</button><p><a href="https://ollama.com/download" target="_blank">Ollama downloads</a> · <a href="https://www.comfy.org/download" target="_blank">ComfyUI installer</a></p></div>
+<div id="setupApi" style="display:none"><h2>API setup</h2><p>Choose DeepSeek or provide any OpenAI-compatible endpoint. API keys are stored in the operating-system credential store.</p><label>Provider</label><select id="setupProvider" onchange="document.getElementById('setupBaseWrap').style.display=this.value==='openai'?'block':'none'"><option value="deepseek">DeepSeek</option><option value="openai">Custom OpenAI-compatible</option></select><div id="setupBaseWrap" style="display:none"><label>API base URL</label><input id="setupBase" placeholder="http://127.0.0.1:11434/v1"></div><label>Model ID</label><input id="setupModel" value="deepseek-flash"><label>API key</label><input id="setupKey" type="password" placeholder="Provider key"><button onclick="finishDesktopSetup(document.getElementById('setupProvider').value)">Save and continue</button><button class="secondary" onclick="showSetupStep('welcome')">Back</button></div>
+</div></div>
 <h1>ACI <small>0.3.0</small></h1><p class="muted">Autonomous Cognitive Intelligence · local-first runtime</p>
 <section><h2>Connection and provider</h2>
 <p class="help">Choose hosted DeepSeek or a local Ollama model. The DeepSeek key is stored in your operating-system credential store when available; it is never returned by the API.</p>
 <label>ACI bearer token (only if configured)</label><input id="token" type="password" placeholder="ACI_API_TOKEN">
-<label>Provider</label><select id="provider"><option value="ollama">Local models (Ollama)</option><option value="deepseek">DeepSeek API</option></select>
+<label>Provider</label><select id="provider"><option value="ollama">Local models (Ollama)</option><option value="deepseek">DeepSeek API</option><option value="openai">Custom OpenAI-compatible API</option></select>
 <label>Model</label><input id="providerModel" value="llama3.2:3b">
 <label>DeepSeek API key</label><input id="deepseekKey" type="password" placeholder="Paste key here; saved securely">
-<button onclick="saveDeepSeek()">Save DeepSeek key</button><button onclick="setProvider()">Activate provider</button>
+<button onclick="saveDeepSeek()">Save DeepSeek key</button><label>Custom API base URL</label><input id="customBaseUrl" placeholder="http://127.0.0.1:11434/v1"><label>Custom API model ID</label><input id="customModelId" placeholder="qwen3:4b"><label>Custom API key (optional)</label><input id="customApiKey" type="password" placeholder="Stored in OS credential store"><button onclick="saveCustomProvider()">Save custom endpoint</button><button onclick="setProvider()">Activate provider</button>
 <pre id="providerStatus" class="muted"></pre></section>
 <section><h2>First-run identity harness</h2><p class="help">Before chat starts, ACI sends its foundational context to the selected model. The model chooses its own name, personality, values, interests, first thought, self-description and profile portrait prompt. Its identity is saved and reused on future launches.</p><label>Foundational context</label><textarea id="seedContext" rows="5">ACI is a new local-first cognitive system. Form a distinct, revisable identity. Develop hybrid memory, computational affect, curiosity, independent preferences, social boundaries, trust and self-reflection over time. Respect privacy, consent, safety and user autonomy. This is a computational self-model, not a claim of consciousness.</textarea><button onclick="initializeHarness()">Create AI identity</button><pre id="identityResult" class="muted"></pre></section>
 <div class="grid">
 <section><h2>Conversation</h2><textarea id="msg" placeholder="Talk to ACI…" rows="4"></textarea><button onclick="send()">Send</button><pre id="reply"></pre></section>
 <section><h2>Persistent memory</h2><textarea id="note" placeholder="A fact or experience ACI should remember" rows="4"></textarea><button onclick="saveNote()">Remember</button><pre id="noteResult"></pre></section>
 </div>
-<section><h2>Local model manager</h2>
+<section><h2>Local model manager</h2><p class="help">Automatically detect hardware and choose a suitable model, or manage the catalogue yourself.</p><button onclick="autoPickModel()">Auto-pick model for this computer</button><button class="secondary" onclick="detectServices()">Detect Ollama / ComfyUI</button><pre id="serviceStatus" class="muted"></pre>
 <p class="help">Find, download, load and remove local models from this interface. The desktop runtime uses the Ollama service as its local inference engine; install Ollama once, then manage models here.</p>
 <label>Search model catalogue</label><input id="catalogQuery" placeholder="Search e.g. qwen, gemma, deepseek" oninput="filterCatalog()">
 <div id="catalog"></div>
@@ -129,6 +181,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}.item{padding:12px;background:#1
 <div class="bar"><div id="pullBar"></div></div><pre id="pullStatus" class="muted"></pre>
 <h3>Installed models</h3><button class="secondary" onclick="refreshModels()">Refresh installed models</button><div id="installed"></div>
 </section>
+<section><h2>Workspace files</h2><p class="help">ACI can browse and edit files only inside its configured workspace folder. Place files here or change ACI_WORKSPACE in .env. It cannot silently browse your entire computer.</p><button onclick="browseWorkspace()">Refresh workspace</button><div id="workspaceFiles"></div><label>Selected text file</label><input id="workspacePath" placeholder="relative/path.txt"><textarea id="workspaceEditor" rows="10" placeholder="Select a text file to edit"></textarea><label>Ask ACI to edit this file</label><input id="workspaceInstruction" placeholder="e.g. fix the bug but keep the existing behaviour"><button onclick="askAIEditWorkspace()">Generate edit draft</button><button onclick="saveWorkspaceFile()">Save reviewed file</button><label>New file path</label><input id="newWorkspacePath" placeholder="notes/new-file.txt"><button onclick="createWorkspaceFile()">Create file</button><pre id="workspaceStatus" class="muted"></pre></section>
+<section><h2>Image generation · ComfyUI</h2><p class="help">Connect a ComfyUI server and paste a workflow exported in API format. Use the prompt placeholders in the workflow's text nodes.</p><label>ComfyUI endpoint</label><input id="comfyUrl" value="http://127.0.0.1:8188"><button class="secondary" onclick="saveComfyEndpoint()">Save ComfyUI endpoint</button><label>Image prompt</label><textarea id="imagePrompt" rows="3" placeholder="Describe an image"></textarea><label>ComfyUI API workflow JSON</label><textarea id="comfyWorkflow" rows="8" placeholder="Paste API-format workflow JSON"></textarea><button class="secondary" onclick="useAciAvatarPrompt()">Use ACI profile-picture prompt</button><button onclick="runImageGeneration()">Generate image</button><pre id="imageStatus" class="muted"></pre><div id="generatedImages"></div></section>
 <section><h2>Runtime status</h2><pre id="status">Loading…</pre></section>
 <script>
 function headers(){const h={'Content-Type':'application/json'};const t=document.getElementById('token').value.trim();if(t)h.Authorization='Bearer '+t;return h}
@@ -138,14 +192,36 @@ async function send(){const m=document.getElementById('msg').value.trim();if(!m)
 async function saveNote(){try{const d=await api('/api/memory','POST',{content:document.getElementById('note').value});document.getElementById('noteResult').textContent=JSON.stringify(d)}catch(e){document.getElementById('noteResult').textContent=e.message}}
 async function saveDeepSeek(){try{const d=await api('/api/settings/deepseek','POST',{api_key:document.getElementById('deepseekKey').value,model:document.getElementById('providerModel').value||'deepseek-flash'});document.getElementById('deepseekKey').value='';document.getElementById('providerStatus').textContent=d.message}catch(e){document.getElementById('providerStatus').textContent=e.message}}
 async function setProvider(){try{const d=await api('/api/provider','POST',{provider:document.getElementById('provider').value,model:document.getElementById('providerModel').value});document.getElementById('providerStatus').textContent=d.message;await refresh()}catch(e){document.getElementById('providerStatus').textContent=e.message}}
-async function refresh(){try{const d=await api('/api/status');document.getElementById('status').textContent=JSON.stringify(d,null,2);try{const identity=await api('/api/identity');if(identity.initialized){document.getElementById('identityResult').textContent=JSON.stringify(identity.profile,null,2)}else{document.getElementById('identityResult').textContent='Not initialized — create an identity before starting chat.'}}catch(e){}document.getElementById('provider').value=d.provider;document.getElementById('providerModel').value=d.model||''}catch(e){document.getElementById('status').textContent=e.message}await refreshModels()}
+
+async function saveCustomProvider(){try{const d=await api('/api/settings/custom-provider','POST',{base_url:document.getElementById('customBaseUrl').value,model:document.getElementById('customModelId').value,api_key:document.getElementById('customApiKey').value});document.getElementById('customApiKey').value='';document.getElementById('providerStatus').textContent=d.message}catch(e){document.getElementById('providerStatus').textContent=e.message}}
+async function autoPickModel(){try{const d=await api('/api/models/auto','POST',{});document.getElementById('pullStatus').textContent='Recommended '+d.model+' · '+d.hardware.ram_gb+' GB RAM · '+(d.hardware.gpu_name||'no NVIDIA GPU detected')+' · '+(d.installed?'Already installed and selected':'Download started');await pollPull()}catch(e){document.getElementById('pullStatus').textContent=e.message}}
+async function detectServices(){try{const d=await api('/api/services');document.getElementById('serviceStatus').textContent='Ollama: '+(d.ollama.available?'available':'not found')+' · ComfyUI: '+(d.comfyui.available?'available':'not found')}catch(e){document.getElementById('serviceStatus').textContent=e.message}}
+async function installOllama(){try{const d=await api('/api/setup/install/ollama','POST',{});document.getElementById('setupStatus').textContent=d.message;setTimeout(detectServices,8000)}catch(e){document.getElementById('setupStatus').textContent=e.message}}
+function showSetupStep(step){document.getElementById('setupWelcome').style.display=step==='welcome'?'block':'none';document.getElementById('setupLocal').style.display=step==='local'?'block':'none';document.getElementById('setupApi').style.display=step==='api'?'block':'none'}
+async function finishDesktopSetup(kind){try{if(kind==='ollama'){const d=await api('/api/services');if(!d.ollama.available){showSetupStep('local');document.getElementById('setupStatus').textContent='Ollama is not running. Install it first.';return}const m=await api('/api/models/auto','POST',{});document.getElementById('setupStatus').textContent='Local model '+m.model+' selected or downloading.';if(!m.installed)await pollPull()}else if(kind==='deepseek'){const key=document.getElementById('setupKey').value;if(key)await api('/api/settings/deepseek','POST',{api_key:key,model:document.getElementById('setupModel').value||'deepseek-flash'});await api('/api/provider','POST',{provider:'deepseek',model:document.getElementById('setupModel').value||'deepseek-flash'})}else{await api('/api/settings/custom-provider','POST',{base_url:document.getElementById('setupBase').value,model:document.getElementById('setupModel').value,api_key:document.getElementById('setupKey').value});await api('/api/provider','POST',{provider:'openai',model:document.getElementById('setupModel').value})}localStorage.setItem('aciSetupComplete','1');document.getElementById('setupOverlay').style.display='none';await refresh()}catch(e){document.getElementById('setupStatus').textContent=e.message}}
+\n
+function showSetupStep(step){document.getElementById('setupWelcome').style.display=step==='welcome'?'block':'none';document.getElementById('setupLocal').style.display=step==='local'?'block':'none';document.getElementById('setupApi').style.display=step==='api'?'block':'none'}
+async function installOllama(){try{const d=await api('/api/setup/install/ollama','POST',{});document.getElementById('setupStatus').textContent=d.message;setTimeout(detectServices,7000)}catch(e){document.getElementById('setupStatus').textContent=e.message}}
+async function detectServices(){try{const d=await api('/api/services');document.getElementById('serviceStatus').textContent='Ollama: '+(d.ollama.available?'available':'not detected')+' · ComfyUI: '+(d.comfyui.available?'available':'not detected');document.getElementById('setupStatus').textContent=document.getElementById('serviceStatus').textContent}catch(e){document.getElementById('serviceStatus').textContent=e.message}}
+async function autoPickModel(){try{const d=await api('/api/models/auto','POST',{});document.getElementById('pullStatus').textContent='Recommended '+d.model+' · '+d.hardware.ram_gb+' GB RAM · '+(d.hardware.gpu_name||'no NVIDIA GPU detected');if(!d.installed)pollPull();else refreshModels()}catch(e){document.getElementById('pullStatus').textContent=e.message}}
+async function finishDesktopSetup(kind){try{if(kind==='ollama'){const d=await api('/api/services');if(!d.ollama.available){document.getElementById('setupStatus').textContent='Ollama is not running. Install it, then retry.';return}const m=await api('/api/models/auto','POST',{});document.getElementById('setupStatus').textContent='Selected '+m.model;if(!m.installed)pollPull()}else if(kind==='deepseek'){const key=document.getElementById('setupKey').value;if(key)await api('/api/settings/deepseek','POST',{api_key:key,model:document.getElementById('setupModel').value||'deepseek-flash'});await api('/api/provider','POST',{provider:'deepseek',model:document.getElementById('setupModel').value||'deepseek-flash'})}else{await api('/api/settings/custom-provider','POST',{base_url:document.getElementById('setupBase').value,model:document.getElementById('setupModel').value,api_key:document.getElementById('setupKey').value});await api('/api/provider','POST',{provider:'openai',model:document.getElementById('setupModel').value})}localStorage.setItem('aciSetupComplete','1');document.getElementById('setupOverlay').style.display='none';await refresh()}catch(e){document.getElementById('setupStatus').textContent=e.message}}
+async function browseWorkspace(path=''){try{const d=await api('/api/device/files?path='+encodeURIComponent(path));const root=document.getElementById('workspaceFiles');root.innerHTML='';const up=path.includes('/')?path.slice(0,path.lastIndexOf('/')):'';if(path) {const b=document.createElement('button');b.textContent='Up';b.onclick=()=>browseWorkspace(up);root.append(b)}for(const item of d.entries){const row=document.createElement('div');row.className='item';const label=document.createElement('span');label.textContent=(item.kind==='directory'?'📁 ':'📄 ')+item.name;const action=document.createElement('button');action.textContent=item.kind==='directory'?'Open':'Edit';action.onclick=()=>item.kind==='directory'?browseWorkspace(item.path):readWorkspaceFile(item.path);row.append(label,action);root.append(row)}document.getElementById('workspaceStatus').textContent='Workspace: '+(path||'/')}catch(e){document.getElementById('workspaceStatus').textContent=e.message}}
+async function readWorkspaceFile(path){try{const d=await api('/api/device/files/read','POST',{path});document.getElementById('workspacePath').value=d.path;document.getElementById('workspaceEditor').value=d.content;document.getElementById('workspaceStatus').textContent='Editing '+d.path}catch(e){document.getElementById('workspaceStatus').textContent=e.message}}
+
+async function askAIEditWorkspace(){try{const d=await api('/api/device/files/ai-edit','POST',{path:document.getElementById('workspacePath').value,instruction:document.getElementById('workspaceInstruction').value});document.getElementById('workspaceEditor').value=d.draft;document.getElementById('workspaceStatus').textContent='AI draft ready. Review it, then click Save reviewed file.'}catch(e){document.getElementById('workspaceStatus').textContent=e.message}}
+async function saveWorkspaceFile(){try{const d=await api('/api/device/files/write','POST',{path:document.getElementById('workspacePath').value,content:document.getElementById('workspaceEditor').value});document.getElementById('workspaceStatus').textContent='Saved '+d.path}catch(e){document.getElementById('workspaceStatus').textContent=e.message}}
+async function createWorkspaceFile(){try{const path=document.getElementById('newWorkspacePath').value;await api('/api/device/files/write','POST',{path,content:''});await readWorkspaceFile(path);browseWorkspace(path.includes('/')?path.slice(0,path.lastIndexOf('/')):'')}catch(e){document.getElementById('workspaceStatus').textContent=e.message}}
+async function saveComfyEndpoint(){try{const d=await api("/api/settings/comfyui","POST",{base_url:document.getElementById("comfyUrl").value});document.getElementById("imageStatus").textContent="Saved ComfyUI endpoint "+d.base_url;detectServices()}catch(e){document.getElementById("imageStatus").textContent=e.message}}
+async function useAciAvatarPrompt(){try{const d=await api("/api/identity");if(!d.profile||!d.profile.avatar_prompt)throw new Error("ACI has not created an avatar prompt yet.");document.getElementById("imagePrompt").value=d.profile.avatar_prompt}catch(e){document.getElementById("imageStatus").textContent=e.message}}
+async function runImageGeneration(){try{const workflow=JSON.parse(document.getElementById('comfyWorkflow').value);const base=document.getElementById('comfyUrl').value;const job=await api('/api/generate/image','POST',{base_url:base,workflow,prompt:document.getElementById('imagePrompt').value});document.getElementById('imageStatus').textContent='Queued '+job.prompt_id;const poll=async()=>{const d=await api('/api/generate/image/'+encodeURIComponent(job.prompt_id)+'?base_url='+encodeURIComponent(base));if(d.images&&d.images.length){const target=document.getElementById('generatedImages');target.innerHTML='';for(const image of d.images){const img=document.createElement('img');img.src=image.url;img.style.maxWidth='100%';img.style.borderRadius='12px';target.append(img)}document.getElementById('imageStatus').textContent='Image generation complete'}else{document.getElementById('imageStatus').textContent='Generating…';setTimeout(poll,1800)}};poll()}catch(e){document.getElementById('imageStatus').textContent=e.message}}
+\nasync function refresh(){try{const d=await api('/api/status');document.getElementById('status').textContent=JSON.stringify(d,null,2);try{const identity=await api('/api/identity');if(identity.initialized){document.getElementById('identityResult').textContent=JSON.stringify(identity.profile,null,2)}else{document.getElementById('identityResult').textContent='Not initialized — create an identity before starting chat.'}}catch(e){}document.getElementById('provider').value=d.provider;document.getElementById('customBaseUrl').value=d.openai_base_url||'';document.getElementById('customModelId').value=d.openai_model||'';document.getElementById('comfyUrl').value=d.comfyui_url||'http://127.0.0.1:8188';document.getElementById('providerModel').value=d.model||''}catch(e){document.getElementById('status').textContent=e.message}await refreshModels()}
 async function refreshModels(){try{const d=await api('/api/models');const el=document.getElementById('installed');el.innerHTML='';for(const m of d.models){const row=document.createElement('div');row.className='item';const label=document.createElement('span');label.textContent=m.name+(m.size?' · '+(m.size/1073741824).toFixed(2)+' GB':'');const actions=document.createElement('span');const load=document.createElement('button');load.textContent='Load';load.onclick=()=>selectModel(m.name);const del=document.createElement('button');del.textContent='Delete';del.className='danger';del.onclick=()=>deleteModel(m.name);actions.append(load,del);row.append(label,actions);el.append(row)}}catch(e){document.getElementById('installed').textContent=e.message}}
 async function filterCatalog(){try{const q=document.getElementById('catalogQuery').value;const d=await api('/api/models/catalog?q='+encodeURIComponent(q));const el=document.getElementById('catalog');el.innerHTML='';for(const m of d.models){const row=document.createElement('div');row.className='item';const label=document.createElement('span');label.textContent=m.name;const desc=document.createElement('small');desc.textContent=m.family+' · '+m.description;label.append(desc);const btn=document.createElement('button');btn.textContent='Download';btn.onclick=()=>pullModel(m.name);row.append(label,btn);el.append(row)}}catch(e){document.getElementById('catalog').textContent=e.message}}
 async function pullModel(name){if(!name)return;try{await api('/api/models/pull','POST',{model:name});document.getElementById('pullStatus').textContent='Starting download: '+name;pollPull()}catch(e){document.getElementById('pullStatus').textContent=e.message}}
 async function pollPull(){try{const d=await api('/api/models/pull');document.getElementById('pullStatus').textContent=d.status+(d.model?' · '+d.model:'')+(d.error?' · '+d.error:'');document.getElementById('pullBar').style.width=(d.percent||0)+'%';if(d.active){setTimeout(pollPull,1000)}else{refreshModels()}}catch(e){document.getElementById('pullStatus').textContent=e.message}}
 async function selectModel(name){try{const d=await api('/api/models/select','POST',{model:name});document.getElementById('providerStatus').textContent=d.message;refresh()}catch(e){document.getElementById('providerStatus').textContent=e.message}}
 async function deleteModel(name){if(!confirm('Delete '+name+'?'))return;try{await api('/api/models/delete','POST',{model:name});refreshModels()}catch(e){alert(e.message)}}
-document.getElementById('provider').addEventListener('change',()=>{document.getElementById('providerModel').value=document.getElementById('provider').value==='deepseek'?'deepseek-flash':'llama3.2:3b'});refresh();filterCatalog();
+document.getElementById('provider').addEventListener('change',()=>{document.getElementById('providerModel').value=document.getElementById('provider').value==='deepseek'?'deepseek-flash':document.getElementById('provider').value==='openai'?(document.getElementById('customModelId').value||'model-name'):'llama3.2:3b'});refresh();filterCatalog();detectServices();browseWorkspace();if(localStorage.getItem('aciSetupComplete')==='1')document.getElementById('setupOverlay').style.display='none';else showSetupStep('welcome');
 </script></body></html>"""
 
 
@@ -162,6 +238,10 @@ async def status():
         "name": "ACI",
         "version": "0.3.0",
         "provider": active_provider,
+        "comfyui_url": settings.comfyui_url,
+        "openai_base_url": settings.openai_base_url,
+        "openai_model": settings.openai_model,
+        "openai_configured": bool(openai_client.api_key),
         "model": active_model,
         "ollama_connected": ollama_connected,
         "ollama_error": ollama_error,
@@ -190,6 +270,15 @@ async def select_provider(body: ProviderInput):
         active_model = model or settings.deepseek_model
         deepseek.model = active_model
         cognition.llm = deepseek
+        memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
+    elif body.provider == "openai":
+        if not openai_client.base_url or not openai_client.model:
+            raise HTTPException(status_code=400, detail="Configure a custom OpenAI-compatible endpoint and model first.")
+        active_provider = "openai"
+        active_model = model or openai_client.model
+        openai_client.model = active_model
+        cognition.llm = openai_client
+        memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
     else:
         try:
             installed = await ollama.status()
@@ -206,6 +295,7 @@ async def select_provider(body: ProviderInput):
         active_model = selected
         ollama.model = selected
         cognition.llm = ollama
+        memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
 
     return {"provider": active_provider, "model": active_model, "message": f"Active provider: {active_provider} · {active_model}"}
 
@@ -237,6 +327,30 @@ async def list_local_models():
     return {"models": models}
 
 
+
+@app.get("/api/hardware")
+async def hardware():
+    return hardware_advice()
+
+
+@app.post("/api/models/auto")
+async def auto_select_model():
+    global pull_task
+    recommendation = hardware_advice()
+    model = recommendation["recommended_model"]
+    try:
+        installed = await ollama.status()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Ollama is unavailable. Install or start it first: {exc}")
+    names = {item.get("name") or item.get("model") for item in installed}
+    if model in names:
+        await select_local_model(ModelInput(model=model))
+        return {"installed": True, "model": model, "hardware": recommendation}
+    if pull_task and not pull_task.done():
+        raise HTTPException(status_code=409, detail="A model download is already running.")
+    pull_task = asyncio.create_task(_run_model_pull(model))
+    return {"installed": False, "started": True, "model": model, "hardware": recommendation}
+
 @app.get("/api/models/catalog")
 async def model_catalog(q: str = Query(default="", max_length=80)):
     term = q.strip().lower()
@@ -248,6 +362,7 @@ async def model_catalog(q: str = Query(default="", max_length=80)):
 
 
 async def _run_model_pull(model: str):
+    global active_provider, active_model
     pull_state.update({
         "active": True, "model": model, "status": "Starting download",
         "completed": 0, "total": 0, "percent": 0, "error": None,
@@ -266,7 +381,11 @@ async def _run_model_pull(model: str):
 
     try:
         await ollama.pull(model, on_update)
-        pull_state.update({"active": False, "status": "Download complete", "percent": 100})
+        ollama.model = model
+        active_provider, active_model = "ollama", model
+        cognition.llm = ollama
+        memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
+        pull_state.update({"active": False, "status": "Download complete · model selected", "percent": 100})
     except Exception as exc:
         pull_state.update({"active": False, "status": "Download failed", "error": str(exc)})
 
@@ -306,6 +425,7 @@ async def select_local_model(body: ModelInput):
     ollama.model = model
     active_provider, active_model = "ollama", model
     cognition.llm = ollama
+    memory.set_state("provider_selection", {"provider": active_provider, "model": active_model})
     return {"selected": True, "provider": active_provider, "model": active_model, "message": f"Loaded model selection: {model}"}
 
 
@@ -362,6 +482,37 @@ async def initialize_harness(body: HarnessInput):
         return {"initialized": True, "profile": profile}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Identity bootstrap failed: {exc}")
+
+
+
+@app.post("/api/settings/custom-provider")
+async def save_custom_provider(body: CustomProviderInput):
+    base_url = body.base_url.strip().rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Endpoint must start with http:// or https://.")
+    try:
+        from .config import store_openai_api_key
+        store_openai_api_key(body.api_key)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    openai_client.base_url = base_url
+    openai_client.model = body.model.strip()
+    if body.api_key.strip():
+        openai_client.api_key = body.api_key.strip()
+    settings.openai_base_url = base_url
+    settings.openai_model = body.model.strip()
+    memory.set_state("custom_provider_config", {"base_url": base_url, "model": body.model.strip()})
+    return {"saved": True, "message": "Custom OpenAI-compatible endpoint saved."}
+
+
+@app.post("/api/settings/comfyui")
+async def save_comfyui_settings(body: ComfySettingsInput):
+    base_url = body.base_url.strip().rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="ComfyUI endpoint must start with http:// or https://.")
+    settings.comfyui_url = base_url
+    memory.set_state("comfyui_url", base_url)
+    return {"saved": True, "base_url": base_url}
 
 
 def main():
