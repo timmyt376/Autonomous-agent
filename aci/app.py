@@ -17,6 +17,7 @@ from .llm import DeepSeekClient, OllamaClient, OpenAICompatibleClient
 from .cognition import Cognition
 from .harness import create_identity
 from .device_api import router as device_router
+from .device_tools import hardware_advice
 
 memory = Memory(settings.data_dir / "aci.sqlite3")
 ollama = OllamaClient(settings.ollama_url, settings.model)
@@ -273,6 +274,30 @@ async def list_local_models():
         raise HTTPException(status_code=503, detail=f"Ollama is unavailable: {exc}")
     return {"models": models}
 
+
+
+@app.get("/api/hardware")
+async def hardware():
+    return hardware_advice()
+
+
+@app.post("/api/models/auto")
+async def auto_select_model():
+    global pull_task
+    recommendation = hardware_advice()
+    model = recommendation["recommended_model"]
+    try:
+        installed = await ollama.status()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Ollama is unavailable. Install or start it first: {exc}")
+    names = {item.get("name") or item.get("model") for item in installed}
+    if model in names:
+        await select_local_model(ModelInput(model=model))
+        return {"installed": True, "model": model, "hardware": recommendation}
+    if pull_task and not pull_task.done():
+        raise HTTPException(status_code=409, detail="A model download is already running.")
+    pull_task = asyncio.create_task(_run_model_pull(model))
+    return {"installed": False, "started": True, "model": model, "hardware": recommendation}
 
 @app.get("/api/models/catalog")
 async def model_catalog(q: str = Query(default="", max_length=80)):
