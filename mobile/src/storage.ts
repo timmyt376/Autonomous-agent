@@ -1,10 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import type { ChatMessage, ConnectionSettings } from "./types";
+import type { AciIdentity } from "./identity";
 
 const SETTINGS_KEY = "aci.mobile.settings.v1";
 const API_KEY_KEY = "aci.mobile.api-key.v1";
 const CHAT_KEY = "aci.mobile.chat.v1";
+const IDENTITY_KEY = "aci.mobile.identity.v1";
 
 const defaults: ConnectionSettings = {
   mode: "device",
@@ -45,4 +47,14 @@ export async function saveChat(messages: ChatMessage[]): Promise<void> {
 
 export async function clearChat(): Promise<void> {
   await AsyncStorage.removeItem(CHAT_KEY);
+}
+
+export async function loadIdentity(): Promise<AciIdentity | null> {
+  const raw = await AsyncStorage.getItem(IDENTITY_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as AciIdentity; } catch { return null; }
+}
+
+export async function saveIdentity(identity: AciIdentity): Promise<void> {
+  await AsyncStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
 }
