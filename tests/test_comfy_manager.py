@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 
 from aci.device_api import WorkflowInspect, inspect_comfy_workflow
@@ -32,14 +33,14 @@ class FakeClient:
 
 
 @pytest.mark.asyncio
-async def test_workflow_inspection_reports_missing_checkpoint(monkeypatch):
+def test_workflow_inspection_reports_missing_checkpoint(monkeypatch):
     import aci.device_api as module
     monkeypatch.setattr(module, "httpx", type("Httpx", (), {"AsyncClient": FakeClient}))
     monkeypatch.setattr(module.settings, "comfyui_url", "http://127.0.0.1:8188")
-    result = await inspect_comfy_workflow(WorkflowInspect(workflow={
+    result = asyncio.run(inspect_comfy_workflow(WorkflowInspect(workflow={
         "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "missing.safetensors"}},
         "2": {"class_type": "LoraLoader", "inputs": {"lora_name": "detail.safetensors"}},
-    }))
+    })))
     assert result["valid"] is False
     assert result["missing"][0]["name"] == "missing.safetensors"
     assert result["dependencies"][1]["installed"] is True
