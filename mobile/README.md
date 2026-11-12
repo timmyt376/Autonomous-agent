@@ -35,6 +35,18 @@ iOS (on macOS):
 
 EAS profiles are included in eas.json. Install the EAS CLI and run eas build --platform android --profile preview for an installable APK, or eas build --platform android --profile production for a Play Store app bundle. iOS builds require macOS/Xcode locally or EAS cloud builds, plus Apple signing and provisioning.
 
+## First launch and provider setup
+
+On first launch, choose API or local. API mode accepts DeepSeek or any OpenAI-compatible endpoint. Local mode offers an automatic small-model install on the phone, or a custom local server endpoint such as http://COMPUTER-IP:11434/v1 for Ollama. The initial automatic on-phone selection is Qwen3 0.6B Q4 GGUF; larger models can be installed later from the Models tab. A separate optional ComfyUI endpoint handles image generation.
+
+## Phone files and media
+
+Open Device & Media and grant access to a folder through Android's system folder picker. The app can list that folder, read UTF-8 text files up to 1 MB, create text files, and save edits. You can ask the selected model to draft a file change; the draft appears in the editor and is not written until you tap Save changes. Camera/gallery access is requested only after you tap Take photo or Choose photo. This is not unrestricted device takeover: Android/iOS enforce their own permissions and app sandbox rules.
+
+## Image generation
+
+Configure a ComfyUI endpoint in Connection settings, then open Device & Media. Paste a ComfyUI workflow exported in API format. Replace the positive prompt text input with the PROMPT placeholder and negative prompt input with the NEGATIVE_PROMPT placeholder. Generation uses that separate image server; the text model may still be running on the phone. Model checkpoints must already be installed in ComfyUI.
+
 ## On-device models
 
 1. Open **Connection** and choose **On device**.
