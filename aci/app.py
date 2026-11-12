@@ -12,6 +12,7 @@ from .config import settings, store_deepseek_api_key
 from .memory import Memory
 from .llm import DeepSeekClient, OllamaClient
 from .cognition import Cognition
+from .harness import create_identity
 
 memory = Memory(settings.data_dir / "aci.sqlite3")
 ollama = OllamaClient(settings.ollama_url, settings.model)
@@ -70,6 +71,10 @@ class DeepSeekSettingsInput(BaseModel):
 
 class ModelInput(BaseModel):
     model: str = Field(min_length=1, max_length=120)
+
+
+class HarnessInput(BaseModel):
+    seed_context: str = Field(default="", max_length=12000)
 
 
 app = FastAPI(title="ACI Runtime", version="0.3.0")
@@ -336,6 +341,21 @@ async def add_goal(body: NoteInput):
 @app.get("/api/goals")
 async def goals():
     return {"items": memory.goals()}
+
+
+@app.get("/api/identity")
+async def get_identity():
+    profile = memory.get_state("identity_profile")
+    return {"initialized": bool(profile), "profile": profile}
+
+
+@app.post("/api/harness/initialize")
+async def initialize_harness(body: HarnessInput):
+    try:
+        profile = await create_identity(cognition.llm, memory, body.seed_context)
+        return {"initialized": True, "profile": profile}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Identity bootstrap failed: {exc}")
 
 
 def main():
