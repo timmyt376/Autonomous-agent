@@ -57,9 +57,7 @@ export async function downloadAndLoadLocalModel(
     const context = await initLlama({
       model: path,
       n_ctx: 2048,
-      n_batch: 256,
-      n_gpu_layers: 99,
-      use_mlock: true
+      n_batch: 256
     });
     activeContext = context;
     activeModelPath = path;
@@ -88,7 +86,7 @@ export async function loadInstalledLocalModel(path: string): Promise<string> {
   const info = await FileSystem.getInfoAsync(path);
   if (!info.exists) throw new Error("The selected model file no longer exists.");
   loading = (async () => {
-    const context = await initLlama({ model: path, n_ctx: 2048, n_batch: 256, n_gpu_layers: 99, use_mlock: true });
+    const context = await initLlama({ model: path, n_ctx: 2048, n_batch: 256 });
     activeContext = context;
     activeModelPath = path;
   })();
