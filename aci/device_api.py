@@ -38,6 +38,107 @@ class ImageJob(BaseModel):
     height: int = Field(default=768, ge=256, le=2048)
 
 
+
+
+class WorkflowInspect(BaseModel):
+    workflow: dict
+
+
+def _configured_comfy_url(base_url: str | None = None) -> str:
+    base = (base_url or settings.comfyui_url).strip().rstrip("/")
+    if not base.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="ComfyUI endpoint must be an HTTP(S) URL.")
+    if base != settings.comfyui_url.rstrip("/"):
+        raise HTTPException(status_code=400, detail="Save this ComfyUI endpoint in ACI settings before using it.")
+    return base
+
+
+@router.get("/api/comfy/capabilities")
+async def comfy_capabilities():
+    """Inspect ComfyUI hardware, installed checkpoints and LoRAs."""
+    base = _configured_comfy_url()
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            stats_response = await client.get(base + "/system_stats")
+            info_response = await client.get(base + "/object_info")
+            stats_response.raise_for_status()
+            info_response.raise_for_status()
+            stats, object_info = stats_response.json(), info_response.json()
+        devices = stats.get("devices", []) if isinstance(stats, dict) else []
+        gpu_devices = []
+        for item in devices:
+            if not isinstance(item, dict):
+                continue
+            total = item.get("vram_total") or item.get("total_vram") or item.get("memory_total")
+            free = item.get("vram_free") or item.get("free_vram") or item.get("memory_free")
+            gpu_devices.append({
+                "name": item.get("name") or item.get("device_name") or "GPU",
+                "vram_total_bytes": total if isinstance(total, (int, float)) else None,
+                "vram_free_bytes": free if isinstance(free, (int, float)) else None,
+            })
+        def choices(node_type: str, key: str) -> list:
+            raw = object_info.get(node_type, {}).get("input", {}).get("required", {}).get(key, [])
+            return raw[0] if raw and isinstance(raw[0], list) else []
+        total_vram_gb = max((d["vram_total_bytes"] or 0 for d in gpu_devices), default=0) / (1024 ** 3)
+        if total_vram_gb >= 12:
+            tier, advice = "high", "SDXL and many larger workflows may fit; check each workflow's memory requirements."
+        elif total_vram_gb >= 8:
+            tier, advice = "mid", "Prefer SD 1.5 or carefully configured SDXL workflows; use low-VRAM options where needed."
+        elif total_vram_gb >= 6:
+            tier, advice = "entry", "Prefer SD 1.5-class checkpoints at modest resolution; avoid assuming SDXL will fit."
+        elif total_vram_gb:
+            tier, advice = "constrained", "Use lightweight SD 1.5 workflows, low resolution and CPU/RAM offload where supported."
+        else:
+            tier, advice = "unknown", "GPU memory was not reported by ComfyUI; inspect the host GPU and workflow before downloading weights."
+        return {
+            "available": True, "devices": gpu_devices,
+            "vram_total_gb": round(total_vram_gb, 2) if total_vram_gb else None,
+            "hardware_tier": tier, "recommendation": advice,
+            "checkpoints": choices("CheckpointLoaderSimple", "ckpt_name"),
+            "loras": choices("LoraLoader", "lora_name"),
+            "model_manager": {
+                "can_list_installed": True, "can_download": False,
+                "download_note": "Verified model downloads are not enabled yet; source, license, file integrity, disk space and workflow compatibility must be checked first."
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not inspect ComfyUI: {str(exc)[:300]}")
+
+
+@router.post("/api/comfy/inspect-workflow")
+async def inspect_comfy_workflow(body: WorkflowInspect):
+    """Compare standard workflow model dependencies with installed ComfyUI models."""
+    base = _configured_comfy_url()
+    if not body.workflow or len(body.workflow) > 5000:
+        raise HTTPException(status_code=400, detail="Provide a non-empty API-format workflow with at most 5,000 nodes.")
+    dependencies = []
+    for node_id, node in body.workflow.items():
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            continue
+        for key in ("ckpt_name", "lora_name", "vae_name", "unet_name"):
+            value = node["inputs"].get(key)
+            if isinstance(value, str) and value and not value.startswith("{{"):
+                dependencies.append({"node_id": str(node_id), "node_type": node.get("class_type", ""), "kind": key, "name": value})
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(base + "/object_info")
+            response.raise_for_status()
+            info = response.json()
+        node_keys = (("CheckpointLoaderSimple", "ckpt_name"), ("LoraLoader", "lora_name"), ("VAELoader", "vae_name"), ("UNETLoader", "unet_name"))
+        installed = {}
+        for node_type, key in node_keys:
+            raw = info.get(node_type, {}).get("input", {}).get("required", {}).get(key, [])
+            installed[key] = set(raw[0]) if raw and isinstance(raw[0], list) else set()
+        checked = [{**item, "installed": item["name"] in installed[item["kind"]] if installed[item["kind"]] else None} for item in dependencies]
+        missing = [item for item in checked if item["installed"] is False]
+        return {"valid": not missing, "dependencies": checked, "missing": missing,
+                "note": "Unknown means a custom node or loader may own this input and is not covered by the standard inventory."}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not validate workflow dependencies: {str(exc)[:300]}")
+
+
 @router.get("/api/services")
 async def services():
     return await service_status(settings.ollama_url, settings.comfyui_url)
@@ -90,11 +191,7 @@ async def write_file(body: FileWrite):
 
 @router.post("/api/generate/image")
 async def generate_image(body: ImageJob):
-    base = body.base_url.strip().rstrip("/")
-    if not base.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="ComfyUI endpoint must be an HTTP(S) URL.")
-    if base != settings.comfyui_url.rstrip("/"):
-        raise HTTPException(status_code=400, detail="Save this ComfyUI endpoint in ACI settings before using it.")
+    base = _configured_comfy_url(body.base_url)
     workflow = substitute_prompt(body.workflow, body.prompt, body.negative_prompt, body.width, body.height)
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -110,9 +207,7 @@ async def generate_image(body: ImageJob):
 
 @router.get("/api/generate/image/{prompt_id}")
 async def image_status(prompt_id: str, base_url: str = Query(default="http://127.0.0.1:8188")):
-    base = base_url.strip().rstrip("/")
-    if base != settings.comfyui_url.rstrip("/"):
-        raise HTTPException(status_code=400, detail="Use the configured ComfyUI endpoint.")
+    base = _configured_comfy_url(base_url)
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(base + "/history/" + prompt_id)
