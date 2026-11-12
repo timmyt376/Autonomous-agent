@@ -7,23 +7,28 @@ import pytest
 from aci.llm import DeepSeekClient
 
 
-def test_deepseek_chat_uses_openai_compatible_endpoint_and_bearer_key():
-    seen = {}
+class RecordingTransport(httpx.AsyncBaseTransport):
+    def __init__(self, seen):
+        self.seen = seen
 
-    def handler(request: httpx.Request):
-        seen["url"] = str(request.url)
-        seen["authorization"] = request.headers.get("authorization")
-        seen["body"] = json.loads(request.read().decode("utf-8"))
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.seen["url"] = str(request.url)
+        self.seen["authorization"] = request.headers.get("authorization")
+        self.seen["body"] = json.loads((await request.aread()).decode("utf-8"))
         return httpx.Response(
             200,
             json={"choices": [{"message": {"content": "Hello from DeepSeek"}}]},
+            request=request,
         )
 
+
+def test_deepseek_chat_uses_openai_compatible_endpoint_and_bearer_key():
+    seen = {}
     client = DeepSeekClient(
         "https://api.deepseek.com",
         "deepseek-flash",
         "test-secret",
-        transport=httpx.MockTransport(handler),
+        transport=RecordingTransport(seen),
     )
 
     reply = asyncio.run(client.chat([{"role": "user", "content": "Hi"}], "System context"))
