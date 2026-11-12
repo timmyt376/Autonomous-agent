@@ -91,6 +91,8 @@ async def generate_image(body: ImageJob):
     base = body.base_url.strip().rstrip("/")
     if not base.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="ComfyUI endpoint must be an HTTP(S) URL.")
+    if base != settings.comfyui_url.rstrip("/"):
+        raise HTTPException(status_code=400, detail="Save this ComfyUI endpoint in ACI settings before using it.")
     workflow = substitute_prompt(body.workflow, body.prompt, body.negative_prompt, body.width, body.height)
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -107,6 +109,8 @@ async def generate_image(body: ImageJob):
 @router.get("/api/generate/image/{prompt_id}")
 async def image_status(prompt_id: str, base_url: str = Query(default="http://127.0.0.1:8188")):
     base = base_url.strip().rstrip("/")
+    if base != settings.comfyui_url.rstrip("/"):
+        raise HTTPException(status_code=400, detail="Use the configured ComfyUI endpoint.")
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(base + "/history/" + prompt_id)
