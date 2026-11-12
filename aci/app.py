@@ -1,6 +1,9 @@
 import asyncio
 import hmac
 import re
+import shutil
+import subprocess
+import sys
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
@@ -10,9 +13,10 @@ import uvicorn
 
 from .config import settings, store_deepseek_api_key
 from .memory import Memory
-from .llm import DeepSeekClient, OllamaClient
+from .llm import DeepSeekClient, OllamaClient, OpenAICompatibleClient
 from .cognition import Cognition
 from .harness import create_identity
+from .device_tools import list_workspace, read_workspace_text, write_workspace_text, service_status, substitute_prompt
 
 memory = Memory(settings.data_dir / "aci.sqlite3")
 ollama = OllamaClient(settings.ollama_url, settings.model)
@@ -22,9 +26,10 @@ deepseek = DeepSeekClient(
     settings.deepseek_api_key,
 )
 
-active_provider = settings.provider if settings.provider in {"ollama", "deepseek"} else "ollama"
-active_model = settings.deepseek_model if active_provider == "deepseek" else settings.model
-cognition = Cognition(deepseek if active_provider == "deepseek" else ollama, memory, settings.max_context_messages)
+active_provider = settings.provider if settings.provider in {"ollama", "deepseek", "openai"} else "ollama"
+active_model = settings.deepseek_model if active_provider == "deepseek" else settings.openai_model if active_provider == "openai" else settings.model
+openai_client = OpenAICompatibleClient(settings.openai_base_url, settings.openai_model, settings.openai_api_key)
+cognition = Cognition(deepseek if active_provider == "deepseek" else openai_client if active_provider == "openai" else ollama, memory, settings.max_context_messages)
 
 pull_state = {
     "active": False,
@@ -60,7 +65,7 @@ class NoteInput(BaseModel):
 
 
 class ProviderInput(BaseModel):
-    provider: Literal["ollama", "deepseek"]
+    provider: Literal["ollama", "deepseek", "openai"]
     model: str | None = Field(default=None, max_length=120)
 
 
@@ -72,6 +77,26 @@ class DeepSeekSettingsInput(BaseModel):
 class ModelInput(BaseModel):
     model: str = Field(min_length=1, max_length=120)
 
+
+class CustomProviderInput(BaseModel):
+    base_url: str = Field(min_length=8, max_length=500)
+    model: str = Field(min_length=1, max_length=160)
+    api_key: str = Field(default="", max_length=1000)
+
+class WorkspaceReadInput(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+
+class WorkspaceWriteInput(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+    content: str = Field(max_length=1000000)
+
+class ComfyImageInput(BaseModel):
+    base_url: str = Field(default="http://127.0.0.1:8188", max_length=500)
+    workflow: dict
+    prompt: str = Field(min_length=1, max_length=6000)
+    negative_prompt: str = Field(default="", max_length=3000)
+    width: int = Field(default=768, ge=256, le=2048)
+    height: int = Field(default=768, ge=256, le=2048)
 
 class HarnessInput(BaseModel):
     seed_context: str = Field(default="", max_length=12000)
@@ -162,6 +187,10 @@ async def status():
         "name": "ACI",
         "version": "0.3.0",
         "provider": active_provider,
+        "comfyui_url": settings.comfyui_url,
+        "openai_base_url": settings.openai_base_url,
+        "openai_model": settings.openai_model,
+        "openai_configured": bool(openai_client.api_key),
         "model": active_model,
         "ollama_connected": ollama_connected,
         "ollama_error": ollama_error,
@@ -190,6 +219,13 @@ async def select_provider(body: ProviderInput):
         active_model = model or settings.deepseek_model
         deepseek.model = active_model
         cognition.llm = deepseek
+    elif body.provider == "openai":
+        if not openai_client.base_url or not openai_client.model:
+            raise HTTPException(status_code=400, detail="Configure a custom OpenAI-compatible endpoint and model first.")
+        active_provider = "openai"
+        active_model = model or openai_client.model
+        openai_client.model = active_model
+        cognition.llm = openai_client
     else:
         try:
             installed = await ollama.status()
