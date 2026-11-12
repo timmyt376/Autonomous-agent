@@ -59,3 +59,13 @@ export async function downloadImageModel(
   await unzip(plain(result.uri), plain(dir));
   return dir;
 }
+
+/** True if the model pack is already extracted on device (has its unet.mnn). */
+export async function isImageModelDownloaded(modelId: string): Promise<boolean> {
+  try {
+    const info = await FileSystem.getInfoAsync(`${imageModelDir(modelId)}/unet.mnn`);
+    return info.exists;
+  } catch {
+    return false;
+  }
+}
