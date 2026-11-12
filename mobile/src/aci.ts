@@ -10,7 +10,9 @@ async function request(url: string, init: RequestInit, timeoutMs = 120000): Prom
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") throw new Error("Request timed out. Check the server and network.");
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Request timed out. Check the server and network.");
+    }
     throw error;
   } finally {
     clearTimeout(timer);
@@ -19,15 +21,18 @@ async function request(url: string, init: RequestInit, timeoutMs = 120000): Prom
 
 function headers(settings: ConnectionSettings): Record<string, string> {
   const result: Record<string, string> = { "Content-Type": "application/json" };
-  if (settings.apiKey.trim()) result.Authorization = `Bearer ${settings.apiKey.trim()}`;
+  if (settings.apiKey.trim()) result.Authorization = "Bearer " + settings.apiKey.trim();
   return result;
 }
 
 export async function discoverModels(settings: ConnectionSettings): Promise<ModelInfo[]> {
+  if (settings.baseUrl.toLowerCase().includes("api.deepseek.com")) {
+    return [{ id: "deepseek-flash" }, { id: "deepseek-v4-pro" }];
+  }
   const response = await request(endpoint(settings.baseUrl, "/models"), {
     method: "GET", headers: headers(settings)
   }, 15000);
-  if (!response.ok) throw new Error(`Model discovery failed (${response.status}). Check the endpoint and provider compatibility.`);
+  if (!response.ok) throw new Error("Model discovery failed (" + response.status + "). Check the endpoint and provider compatibility.");
   const data = await response.json() as { data?: Array<{ id?: string }> };
   return (data.data ?? []).filter(item => typeof item.id === "string").map(item => ({ id: item.id! }));
 }
@@ -39,6 +44,9 @@ export async function sendMessage(
 ): Promise<string> {
   if (!settings.baseUrl.trim()) throw new Error("Enter a model endpoint in Settings.");
   if (!settings.model.trim()) throw new Error("Choose a model in Settings.");
+  if (settings.baseUrl.toLowerCase().includes("api.deepseek.com") && !settings.apiKey.trim()) {
+    throw new Error("Add your DeepSeek API key in Connection settings.");
+  }
   const messages = [
     { role: "system", content: "You are ACI, a helpful personal AI assistant. Be clear about uncertainty. Do not claim to be conscious or to have real feelings." },
     ...history.slice(-20).map(item => ({ role: item.role, content: item.content })),
@@ -50,7 +58,7 @@ export async function sendMessage(
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Model request failed (${response.status}): ${detail.slice(0, 300) || response.statusText}`);
+    throw new Error("Model request failed (" + response.status + "): " + (detail.slice(0, 300) || response.statusText));
   }
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const content = data.choices?.[0]?.message?.content;
@@ -60,15 +68,19 @@ export async function sendMessage(
 
 export async function checkConnection(settings: ConnectionSettings): Promise<string> {
   const models = await discoverModels(settings);
-  return models.length ? `Connected · ${models.length} model(s) found` : "Connected · no models were listed";
+  return models.length ? "Connected · " + models.length + " model(s) found" : "Connected · no models were listed";
 }
 
 export async function checkAciServer(baseUrl: string, apiKey = ""): Promise<string> {
   if (!baseUrl.trim()) throw new Error("Enter the ACI server address.");
-  const response = await request(endpoint(baseUrl, "/api/status"), { method: "GET", headers: apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {} }, 15000);
-  if (!response.ok) throw new Error(`ACI server check failed (${response.status}).`);
-  const data = await response.json() as { name?: string; version?: string; ollama_connected?: boolean; model?: string };
-  return `${data.name ?? "ACI"} ${data.version ?? ""} · ${data.ollama_connected ? "model backend connected" : "server online, model backend offline"} · ${data.model ?? "no model"}`;
+  const response = await request(endpoint(baseUrl, "/api/status"), {
+    method: "GET",
+    headers: apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}
+  }, 15000);
+  if (!response.ok) throw new Error("ACI server check failed (" + response.status + ").");
+  const data = await response.json() as { name?: string; version?: string; provider?: string; ollama_connected?: boolean; model?: string };
+  const backend = data.provider === "deepseek" ? "DeepSeek API" : data.ollama_connected ? "local model backend" : "server online, model backend offline";
+  return (data.name ?? "ACI") + " " + (data.version ?? "") + " · " + backend + " · " + (data.model ?? "no model");
 }
 
 export async function sendToAciServer(baseUrl: string, message: string, apiKey = ""): Promise<string> {
@@ -80,7 +92,7 @@ export async function sendToAciServer(baseUrl: string, message: string, apiKey =
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`ACI server request failed (${response.status}): ${detail.slice(0, 300)}`);
+    throw new Error("ACI server request failed (" + response.status + "): " + detail.slice(0, 300));
   }
   const data = await response.json() as { reply?: string };
   if (!data.reply?.trim()) throw new Error("ACI server returned an empty reply.");
@@ -89,14 +101,18 @@ export async function sendToAciServer(baseUrl: string, message: string, apiKey =
 
 export async function saveAciMemory(baseUrl: string, content: string, apiKey = ""): Promise<void> {
   const response = await request(endpoint(baseUrl, "/api/memory"), {
-    method: "POST", headers: { "Content-Type": "application/json", ...(apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}) }, body: JSON.stringify({ content })
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}) },
+    body: JSON.stringify({ content })
   });
-  if (!response.ok) throw new Error(`Could not save memory (${response.status}).`);
+  if (!response.ok) throw new Error("Could not save memory (" + response.status + ").");
 }
 
 export async function addAciGoal(baseUrl: string, content: string, apiKey = ""): Promise<void> {
   const response = await request(endpoint(baseUrl, "/api/goals"), {
-    method: "POST", headers: { "Content-Type": "application/json", ...(apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}) }, body: JSON.stringify({ content })
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(apiKey.trim() ? { Authorization: "Bearer " + apiKey.trim() } : {}) },
+    body: JSON.stringify({ content })
   });
-  if (!response.ok) throw new Error(`Could not add goal (${response.status}).`);
+  if (!response.ok) throw new Error("Could not add goal (" + response.status + ").");
 }

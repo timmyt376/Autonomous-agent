@@ -220,7 +220,7 @@ export default function App() {
               <Text style={styles.label}>Direct GGUF model URL</Text>
               <TextInput value={settings.modelUrl} onChangeText={value => updateSettings({ ...settings, modelUrl: value })} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={styles.field} placeholder="https://huggingface.co/.../model.Q4_K_M.gguf" placeholderTextColor={colors.muted} />
               <Text style={styles.help}>Paste a direct HTTPS download link to a GGUF file. It will be saved in private app storage and loaded by llama.cpp on this phone.</Text>
-              {downloadProgress !== null ? <View><Text style={styles.help}>Download progress: {(downloadProgress * 100).toFixed(0)}%</Text><View style={styles.progressTrack}><View style={[styles.progressFill, { width: (Math.max(0, Math.min(100, downloadProgress * 100))) + "%" }]} /></View></View> : null}
+              {downloadProgress !== null ? <View><Text style={styles.help}>Download progress: {(downloadProgress * 100).toFixed(0)}%</Text><View style={styles.progressTrack}><View style={[styles.progressFill, { width: ((Math.max(0, Math.min(100, downloadProgress * 100))) + "%") as `${number}%` }]} /></View></View> : null}
               <TouchableOpacity style={styles.primaryButton} onPress={connect}><Text style={styles.primaryText}>Download & load on this phone</Text></TouchableOpacity>
             </>
           ) : settings.mode === "aci-server" ? (
