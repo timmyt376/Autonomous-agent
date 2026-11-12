@@ -9,6 +9,7 @@ import { SetupWizard } from "./src/SetupWizard";
 import { choosePhoneFolder, listPhoneFolder, readPhoneTextFile, writePhoneTextFile, createPhoneTextFile } from "./src/fileAccess";
 import type { PhoneFile } from "./src/fileAccess";
 import { generateComfyImage } from "./src/comfy";
+import { generateImageOnDevice } from "./src/imageGenFallback";
 import { ImageGen } from "./src/ImageGen";
 import { StatusBar } from "expo-status-bar";
 import { addAciGoal, checkAciServer, discoverModels, saveAciMemory, sendMessage, sendToAciServer } from "./src/aci";
@@ -164,8 +165,16 @@ export default function App() {
     try {
       const uri = await generateComfyImage(settings.comfyUrl, comfyWorkflow, comfyPrompt);
       setGeneratedImageUri(uri); setStatus("Image generated and saved in ACI app storage.");
-    } catch (error) { setStatus(error instanceof Error ? error.message : "Image generation failed."); }
-    finally { setToolsBusy(false); }
+    } catch (error) {
+      setStatus("ComfyUI failed — switching to the on-device model (first load can take a minute)…");
+      try {
+        const uri = await generateImageOnDevice(comfyPrompt);
+        setGeneratedImageUri(uri);
+        setStatus("Image generated on-device after ComfyUI failed.");
+      } catch (fallbackError) {
+        setStatus("Image generation failed. " + (fallbackError instanceof Error ? fallbackError.message : "Neither ComfyUI nor the on-device model worked."));
+      }
+    } finally { setToolsBusy(false); }
   }
 
   async function refreshModels() { setInstalledModels(await listInstalledModels()); }
